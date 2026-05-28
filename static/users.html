@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BCM — Usuários</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--primary:#0d1f3c;--accent:#0284c7;--bg:#edf1f7;--sur:#fff;--sur2:#f4f7fb;--brd:#dde3ed;--txt:#1e293b;--txt2:#475569;--txt3:#94a3b8;--err:#dc2626}
+html.dark{--bg:#0e1626;--sur:#131f33;--sur2:#182540;--brd:#243050;--txt:#dde4f0;--txt2:#8fa3c0;--txt3:#4d6080}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--txt)}
+nav{background:var(--primary);color:#fff;height:58px;display:flex;align-items:center;padding:0 24px;gap:16px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.nav-logo img{height:36px;background:#fff;padding:3px 6px;border-radius:6px}
+.nav-sep{flex:1}
+.nav-btn{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);color:#fff;padding:5px 12px;border-radius:6px;font-size:13px;cursor:pointer;text-decoration:none;display:inline-block}
+.nav-btn:hover{background:rgba(255,255,255,.25)}
+.dk-btn{background:none;border:1px solid rgba(255,255,255,.3);color:#fff;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:15px}
+.page{max-width:900px;margin:0 auto;padding:32px 20px}
+.page-hdr{display:flex;align-items:center;margin-bottom:24px}
+.page-hdr h1{font-size:22px}
+.btn-new{background:var(--accent);color:#fff;border:none;padding:8px 18px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer}
+table{width:100%;border-collapse:collapse;background:var(--sur);border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.06)}
+thead{background:var(--primary)}
+thead th{color:#fff;font-size:12px;text-transform:uppercase;letter-spacing:.05em;padding:12px 16px;text-align:left;font-weight:600}
+tbody tr{border-bottom:1px solid var(--brd)}
+tbody tr:last-child{border:none}
+tbody tr:hover{background:var(--sur2)}
+td{padding:12px 16px;font-size:14px;color:var(--txt)}
+.role-badge{font-size:11px;font-weight:600;padding:3px 8px;border-radius:20px}
+.r-admin{background:#fee2e2;color:#991b1b}
+.r-gestor{background:#dbeafe;color:#1e40af}
+.r-tecnico{background:#dcfce7;color:#166534}
+.r-cliente{background:#fef9c3;color:#854d0e}
+html.dark .r-admin{background:#450a0a;color:#fca5a5}
+html.dark .r-gestor{background:#1e3a5f;color:#93c5fd}
+html.dark .r-tecnico{background:#14532d;color:#86efac}
+html.dark .r-cliente{background:#451a03;color:#fcd34d}
+.active-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#16a34a;margin-right:6px}
+.inactive-dot{background:#94a3b8}
+.icon-btn{background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:5px;color:var(--txt3);font-size:14px}
+.icon-btn:hover{background:var(--sur2);color:var(--accent)}
+/* Modal */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center}
+.overlay.open{display:flex}
+.modal{background:var(--sur);border-radius:16px;padding:32px;width:100%;max-width:420px;box-shadow:0 8px 40px rgba(0,0,0,.2)}
+.modal h3{font-size:18px;margin-bottom:20px}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:12px;color:var(--txt2);margin-bottom:4px}
+.field input,.field select{width:100%;padding:8px 10px;border:1.5px solid var(--brd);border-radius:7px;font-size:14px;color:var(--txt);background:var(--sur);outline:none}
+.field input:focus,.field select:focus{border-color:var(--accent)}
+.modal-btns{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+.btn-cancel{background:var(--sur2);border:1px solid var(--brd);color:var(--txt2);padding:8px 16px;border-radius:7px;cursor:pointer;font-size:13px}
+.btn-save{background:var(--accent);color:#fff;border:none;padding:8px 18px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600}
+.hint{font-size:11px;color:var(--txt3);margin-top:3px}
+</style>
+</head>
+<body>
+<nav>
+  <div style="display:flex;align-items:center;gap:10px">
+    <img id="nav-logo" src="" alt="BCM" style="height:36px;background:#fff;padding:3px 6px;border-radius:6px">
+    <a href="/dash" class="nav-btn">← Obras</a>
+  </div>
+  <span class="nav-sep"></span>
+  <span style="font-size:13px;opacity:.8" id="nav-user"></span>
+  <button class="dk-btn" id="dk-btn">🌙</button>
+  <button class="nav-btn" onclick="logout()">Sair</button>
+</nav>
+
+<div class="page">
+  <div class="page-hdr">
+    <h1>Usuários</h1>
+    <span style="flex:1"></span>
+    <button class="btn-new" onclick="openNew()">＋ Novo Usuário</button>
+  </div>
+  <table>
+    <thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Status</th><th></th></tr></thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<div class="overlay" id="ov-new">
+  <div class="modal">
+    <h3 id="m-title">Novo Usuário</h3>
+    <div class="field"><label>Nome *</label><input id="f-name" placeholder="Nome completo"></div>
+    <div class="field"><label>E-mail *</label><input id="f-email" type="email" placeholder="email@bcm.com.br"></div>
+    <div class="field">
+      <label>Senha <span id="pw-hint">(obrigatório)</span></label>
+      <input id="f-pw" type="password" placeholder="Mínimo 6 caracteres">
+      <div class="hint" id="pw-hint2"></div>
+    </div>
+    <div class="field">
+      <label>Perfil *</label>
+      <select id="f-role">
+        <option value="admin">Admin</option>
+        <option value="gestor">Gestor / Engenheiro</option>
+        <option value="tecnico" selected>Técnico de Campo</option>
+        <option value="cliente">Cliente (somente leitura)</option>
+      </select>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
+      <button class="btn-save" onclick="saveUser()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){const DK='gantt-dark';function apply(on){document.documentElement.classList.toggle('dark',on);const b=document.getElementById('dk-btn');if(b)b.textContent=on?'☀️':'🌙';}apply(localStorage.getItem(DK)==='1');document.getElementById('dk-btn').onclick=function(){const on=!document.documentElement.classList.contains('dark');localStorage.setItem(DK,on?'1':'0');apply(on);};})();
+
+const TOKEN=localStorage.getItem('bcm_token');
+const ROLE=localStorage.getItem('bcm_role');
+if(!TOKEN||ROLE!=='admin'){window.location.href='/';throw 0;}
+document.getElementById('nav-user').textContent=localStorage.getItem('bcm_name')+' ('+ROLE+')';
+fetch('/static/bcm-logo.jpg',{method:'HEAD'}).then(r=>{if(r.ok)document.getElementById('nav-logo').src='/static/bcm-logo.jpg';}).catch(()=>{});
+
+let editId=null;
+
+async function api(path,opts={}){
+  const r=await fetch(path,{...opts,headers:{'Authorization':'Bearer '+TOKEN,'Content-Type':'application/json',...(opts.headers||{})}});
+  if(r.status===401){logout();throw 0;}
+  return r;
+}
+function logout(){localStorage.clear();window.location.href='/';}
+
+const ROLE_NAMES={admin:'Admin',gestor:'Gestor',tecnico:'Técnico',cliente:'Cliente'};
+const ROLE_CLASSES={admin:'r-admin',gestor:'r-gestor',tecnico:'r-tecnico',cliente:'r-cliente'};
+
+async function load(){
+  const r=await api('/api/users');
+  const users=await r.json();
+  document.getElementById('tbody').innerHTML=users.map(u=>`
+    <tr>
+      <td>${esc(u.name)}</td>
+      <td style="color:var(--txt2)">${esc(u.email)}</td>
+      <td><span class="role-badge ${ROLE_CLASSES[u.role]||''}">${ROLE_NAMES[u.role]||u.role}</span></td>
+      <td><span class="${u.active?'active-dot':'inactive-dot'} active-dot"></span>${u.active?'Ativo':'Inativo'}</td>
+      <td>
+        <button class="icon-btn" onclick="editUser(${u.id},'${esc(u.name)}','${esc(u.email)}','${u.role}')" title="Editar">✏️</button>
+        ${u.id!=1?`<button class="icon-btn" onclick="toggleActive(${u.id},${u.active})" title="${u.active?'Desativar':'Ativar'}">${u.active?'🔒':'🔓'}</button>`:''}
+      </td>
+    </tr>
+  `).join('');
+}
+load();
+
+function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+function openNew(){
+  editId=null;
+  document.getElementById('m-title').textContent='Novo Usuário';
+  document.getElementById('f-name').value='';
+  document.getElementById('f-email').value='';
+  document.getElementById('f-pw').value='';
+  document.getElementById('f-role').value='tecnico';
+  document.getElementById('pw-hint').textContent='(obrigatório)';
+  document.getElementById('pw-hint2').textContent='';
+  document.getElementById('ov-new').classList.add('open');
+}
+function editUser(id,name,email,role){
+  editId=id;
+  document.getElementById('m-title').textContent='Editar Usuário';
+  document.getElementById('f-name').value=name;
+  document.getElementById('f-email').value=email;
+  document.getElementById('f-pw').value='';
+  document.getElementById('f-role').value=role;
+  document.getElementById('pw-hint').textContent='(deixe em branco para não alterar)';
+  document.getElementById('pw-hint2').textContent='';
+  document.getElementById('ov-new').classList.add('open');
+}
+function closeModal(){document.getElementById('ov-new').classList.remove('open');}
+document.getElementById('ov-new').onclick=e=>{if(e.target===document.getElementById('ov-new'))closeModal();};
+
+async function saveUser(){
+  const name=document.getElementById('f-name').value.trim();
+  const email=document.getElementById('f-email').value.trim();
+  const pw=document.getElementById('f-pw').value;
+  const role=document.getElementById('f-role').value;
+  if(!name||!email){alert('Nome e e-mail são obrigatórios');return;}
+  if(!editId&&!pw){alert('Senha obrigatória para novo usuário');return;}
+  const body={name,email,role};
+  if(pw)body.password=pw;
+  let r;
+  if(editId){
+    r=await api('/api/users/'+editId,{method:'PUT',body:JSON.stringify(body)});
+  }else{
+    if(!body.password){alert('Informe a senha');return;}
+    r=await api('/api/users',{method:'POST',body:JSON.stringify(body)});
+  }
+  if(!r.ok){const d=await r.json();alert(d.detail||'Erro');return;}
+  closeModal();load();
+}
+
+async function toggleActive(id,cur){
+  if(!confirm(cur?'Desativar este usuário?':'Reativar este usuário?'))return;
+  await api('/api/users/'+id,{method:'PUT',body:JSON.stringify({active:cur?0:1})});
+  load();
+}
+</script>
+</body>
+</html>
