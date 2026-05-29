@@ -395,7 +395,7 @@ function draw(){
     const col=COLORS[ci];
     const avg=Math.round(ct.reduce((a,t)=>a+t.progress,0)/ct.length);
     const isC=collapsed.has(cat);
-    lp+=`<div class="cat-row${isC?' collapsed':''}" onclick="toggleCat(${JSON.stringify(cat)})"><span class="caret">▾</span><span class="cat-name">${esc(cat)}</span><span class="cat-pct" style="color:${col}">${avg}%</span></div>`;
+    lp+=`<div class="cat-row${isC?' collapsed':''}" data-cat="${cat.replace(/"/g,'&quot;')}" style="cursor:pointer"><span class="caret">▾</span><span class="cat-name">${esc(cat)}</span><span class="cat-pct" style="color:${col}">${avg}%</span></div>`;
     cv+=`<div class="g-row g-cat-row" style="top:${y}px;width:${W}px"></div>`;
     y+=ROW;
     if(!isC){
@@ -420,6 +420,11 @@ function draw(){
   lb.onscroll=()=>{tb.scrollTop=lb.scrollTop;};
   tb.onscroll=()=>{lb.scrollTop=tb.scrollTop;};
   lb.addEventListener('wheel',e=>{e.preventDefault();lb.scrollTop+=e.deltaY;},{passive:false});
+  // click delegation para colapsar/expandir categorias
+  lb.onclick=e=>{
+    const row=e.target.closest('.cat-row');
+    if(row) toggleCat(row.dataset.cat);
+  };
 }
 
 function toggleCat(c){if(collapsed.has(c))collapsed.delete(c);else collapsed.add(c);draw();}
