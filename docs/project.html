@@ -102,15 +102,44 @@ html.dark .tb-btn,html.dark .zb:not(.on),html.dark .fb:not(.on){background:var(-
 @page{size:A4 landscape;margin:10mm}
 body{display:block!important;height:auto!important;overflow:visible!important;background:#fff!important}
 nav,.tb,.overlay{display:none!important}
-.hdr{position:static!important;border-bottom:2px solid #0d1f3c;padding-bottom:8px;margin-bottom:8px}
-.kpi .val{font-size:14px!important}
-.gantt{display:block!important;height:auto!important;overflow:visible!important}
-.left-panel{width:260px!important;float:left;overflow:visible!important;height:auto!important}
-.lp-hdr{background:#0d1f3c!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+
+/* ── Cabeçalho fixo em todas as páginas ── */
+.hdr{
+  position:fixed!important;top:0;left:0;right:0;
+  background:#fff!important;
+  border-bottom:2px solid #0d1f3c!important;
+  padding:6px 10px!important;
+  z-index:100;
+  -webkit-print-color-adjust:exact;print-color-adjust:exact
+}
+.kpi .val{font-size:13px!important}
+.kpi .lbl{font-size:9px!important}
+.kpi-div{height:28px!important}
+
+/* Cabeçalho de colunas fixo logo abaixo dos KPIs */
+.lp-hdr{
+  position:fixed!important;top:62px;left:0;width:260px!important;
+  background:#0d1f3c!important;color:#fff!important;
+  z-index:100;height:56px!important;
+  -webkit-print-color-adjust:exact;print-color-adjust:exact
+}
+.tl-hdr{
+  position:fixed!important;top:62px;left:260px;right:0;
+  background:#fff!important;z-index:100;
+  -webkit-print-color-adjust:exact;print-color-adjust:exact
+}
+.tl-mc{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+
+/* Empurra o conteúdo para baixo do cabeçalho fixo */
+.gantt{
+  display:block!important;height:auto!important;overflow:visible!important;
+  margin-top:118px!important
+}
+.left-panel{width:260px!important;float:left;overflow:visible!important;height:auto!important;border:none!important}
 .lp-body{overflow:visible!important;height:auto!important}
 .right-panel{margin-left:262px;overflow:visible!important;height:auto!important}
-.tl-hdr,.tl-body,.tl-canvas{overflow:visible!important;height:auto!important}
-.bar,.bar-fill,.cat-row,.tl-mc{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.tl-body,.tl-canvas{overflow:visible!important;height:auto!important}
+.bar,.bar-fill,.cat-row{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .today-line,.task-edit-btn{display:none!important}
 }
 </style>
