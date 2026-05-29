@@ -275,7 +275,7 @@ async function init() {
 async function logout() { await sb.auth.signOut(); localStorage.clear(); window.location.href='index.html'; }
 
 async function loadTasks() {
-  const { data } = await sb.from('tasks').select('*').eq('project_id',PID).order('category').order('order_idx').order('id');
+  const { data } = await sb.from('tasks').select('*').eq('project_id',PID).order('order_idx').order('id');
   tasks = data || [];
   cats = [...new Set(tasks.map(t=>t.category))];
   renderFilters();
