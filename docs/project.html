@@ -154,6 +154,7 @@ nav,.tb,.overlay{display:none!important}
   </div>
   <span class="nav-sep"></span>
   <span style="font-size:12px;opacity:.8" id="nav-user"></span>
+  <button class="nav-btn" id="btn-members" style="display:none" onclick="openMembers()">👥 Equipe</button>
   <button class="nav-btn" onclick="printGantt()">🖨 Imprimir</button>
   <button class="dk-btn" id="dk-btn">🌙</button>
   <button class="nav-btn" onclick="logout()">Sair</button>
@@ -244,6 +245,19 @@ nav,.tb,.overlay{display:none!important}
   </div>
 </div>
 
+<!-- Members modal -->
+<div class="overlay" id="ov-members">
+  <div class="modal">
+    <h3>👥 Equipe da Obra</h3>
+    <div class="sub">Gerencie quem tem acesso a este cronograma.</div>
+    <div id="members-list" style="margin-bottom:16px;max-height:280px;overflow-y:auto"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center" id="members-add"></div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="document.getElementById('ov-members').classList.remove('open')">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const { createClient } = supabase;
 const sb = createClient('https://fkndewrridhgwwkrjmmc.supabase.co','sb_publishable_49gXUr0vbSdYLcHJXorglg_zVfhREcY');
@@ -262,6 +276,7 @@ const COLORS=['#3b82f6','#8b5cf6','#10b981','#f59e0b','#ef4444','#06b6d4','#ec48
 
 document.getElementById('nav-user').textContent = (localStorage.getItem('bcm_name')||'')+' ('+ROLE+')';
 if(CAN_EDIT) document.getElementById('btn-new-task').style.display='';
+if(CAN_EDIT) document.getElementById('btn-members').style.display='';
 
 async function init() {
   const { data: { session } } = await sb.auth.getSession();
@@ -530,7 +545,60 @@ async function saveNewTask(){
   await loadTasks();
 }
 
-['ov-task','ov-new'].forEach(id=>{document.getElementById(id).onclick=e=>{if(e.target.id===id)document.getElementById(id).classList.remove('open');};});
+['ov-task','ov-new','ov-members'].forEach(id=>{document.getElementById(id).onclick=e=>{if(e.target.id===id)document.getElementById(id).classList.remove('open');};});
+
+// ─── Members ─────────────────────────────────────────────────
+async function openMembers(){
+  document.getElementById('ov-members').classList.add('open');
+  await loadMembers();
+}
+
+async function loadMembers(){
+  const RNAMES={admin:'Admin',gestor:'Gestor',tecnico:'Técnico',cliente:'Cliente'};
+  const {data:members}=await sb.from('project_members')
+    .select('user_id, role, profiles(name,email)')
+    .eq('project_id',PID);
+  document.getElementById('members-list').innerHTML=(members||[]).map(m=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--brd)">
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600">${esc(m.profiles?.name||'—')}</div>
+        <div style="font-size:11px;color:var(--txt3)">${esc(m.profiles?.email||'')}</div>
+      </div>
+      <span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--sur2);color:var(--txt2)">${RNAMES[m.role]||m.role}</span>
+      <button onclick="removeMember('${m.user_id}')" style="background:none;border:none;cursor:pointer;color:var(--txt3);font-size:16px;padding:0 4px" title="Remover">✕</button>
+    </div>`).join('')||'<div style="color:var(--txt3);font-size:13px;padding:8px 0">Nenhum membro ainda.</div>';
+
+  // lista usuários disponíveis para adicionar
+  const memberIds=new Set((members||[]).map(m=>m.user_id));
+  const {data:users}=await sb.from('profiles').select('id,name,email').eq('active',true);
+  const avail=(users||[]).filter(u=>!memberIds.has(u.id));
+  document.getElementById('members-add').innerHTML=avail.length?`
+    <select id="add-uid" style="padding:6px 8px;border:1.5px solid var(--brd);border-radius:6px;background:var(--sur);color:var(--txt);font-size:13px">
+      ${avail.map(u=>`<option value="${u.id}">${esc(u.name)} (${esc(u.email)})</option>`).join('')}
+    </select>
+    <select id="add-role" style="padding:6px 8px;border:1.5px solid var(--brd);border-radius:6px;background:var(--sur);color:var(--txt);font-size:13px">
+      <option value="gestor">Gestor</option>
+      <option value="tecnico" selected>Técnico</option>
+      <option value="cliente">Cliente</option>
+    </select>
+    <button onclick="addMember()" style="background:var(--accent);color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600">+ Adicionar</button>
+  `:'<span style="font-size:12px;color:var(--txt3)">Todos os usuários já são membros.</span>';
+}
+
+async function addMember(){
+  const uid=document.getElementById('add-uid')?.value;
+  const role=document.getElementById('add-role')?.value;
+  if(!uid)return;
+  const{error}=await sb.from('project_members').insert({project_id:PID,user_id:uid,role});
+  if(error){alert(error.message);return;}
+  await loadMembers();
+}
+
+async function removeMember(uid){
+  if(!confirm('Remover este membro da obra?'))return;
+  await sb.from('project_members').delete().eq('project_id',PID).eq('user_id',uid);
+  await loadMembers();
+}
 
 function printGantt(){
   // Expande todas as categorias
