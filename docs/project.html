@@ -97,6 +97,22 @@ html.dark .tb-btn,html.dark .zb:not(.on),html.dark .fb:not(.on){background:var(-
 .log-item{padding:8px 0;border-bottom:1px solid var(--brd);font-size:12px}
 .log-item:last-child{border:none}
 .frow{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+@media print{
+@page{size:A4 landscape;margin:10mm}
+body{display:block!important;height:auto!important;overflow:visible!important;background:#fff!important}
+nav,.tb,.overlay{display:none!important}
+.hdr{position:static!important;border-bottom:2px solid #0d1f3c;padding-bottom:8px;margin-bottom:8px}
+.kpi .val{font-size:14px!important}
+.gantt{display:block!important;height:auto!important;overflow:visible!important}
+.left-panel{width:260px!important;float:left;overflow:visible!important;height:auto!important}
+.lp-hdr{background:#0d1f3c!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.lp-body{overflow:visible!important;height:auto!important}
+.right-panel{margin-left:262px;overflow:visible!important;height:auto!important}
+.tl-hdr,.tl-body,.tl-canvas{overflow:visible!important;height:auto!important}
+.bar,.bar-fill,.cat-row,.tl-mc{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.today-line,.task-edit-btn{display:none!important}
+}
 </style>
 </head>
 <body>
@@ -109,7 +125,7 @@ html.dark .tb-btn,html.dark .zb:not(.on),html.dark .fb:not(.on){background:var(-
   </div>
   <span class="nav-sep"></span>
   <span style="font-size:12px;opacity:.8" id="nav-user"></span>
-  <button class="nav-btn" onclick="window.print()">🖨 Imprimir</button>
+  <button class="nav-btn" onclick="printGantt()">🖨 Imprimir</button>
   <button class="dk-btn" id="dk-btn">🌙</button>
   <button class="nav-btn" onclick="logout()">Sair</button>
 </nav>
@@ -475,6 +491,19 @@ async function saveNewTask(){
 }
 
 ['ov-task','ov-new'].forEach(id=>{document.getElementById(id).onclick=e=>{if(e.target.id===id)document.getElementById(id).classList.remove('open');};});
+
+function printGantt(){
+  // Expande todas as categorias
+  const prev=new Set(collapsed);
+  collapsed.clear();
+  draw();
+  setTimeout(()=>{
+    window.print();
+    // Restaura estado original após imprimir
+    prev.forEach(c=>collapsed.add(c));
+    draw();
+  },400);
+}
 
 init();
 </script>
