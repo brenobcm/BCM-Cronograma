@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BCM — Usuários</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--primary:#0d1f3c;--accent:#0284c7;--bg:#edf1f7;--sur:#fff;--sur2:#f4f7fb;--brd:#dde3ed;--txt:#1e293b;--txt2:#475569;--txt3:#94a3b8}
+html.dark{--bg:#0e1626;--sur:#131f33;--sur2:#182540;--brd:#243050;--txt:#dde4f0;--txt2:#8fa3c0;--txt3:#4d6080}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--txt)}
+nav{background:var(--primary);color:#fff;height:58px;display:flex;align-items:center;padding:0 24px;gap:12px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.nav-sep{flex:1}
+.nav-btn{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);color:#fff;padding:5px 12px;border-radius:6px;font-size:13px;cursor:pointer;text-decoration:none}
+.dk-btn{background:none;border:1px solid rgba(255,255,255,.3);color:#fff;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:15px}
+.page{max-width:900px;margin:0 auto;padding:32px 20px}
+.page-hdr{display:flex;align-items:center;margin-bottom:24px}
+.btn-new{background:var(--accent);color:#fff;border:none;padding:8px 18px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer}
+table{width:100%;border-collapse:collapse;background:var(--sur);border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.06)}
+thead{background:var(--primary)}
+thead th{color:#fff;font-size:12px;text-transform:uppercase;letter-spacing:.05em;padding:12px 16px;text-align:left;font-weight:600}
+tbody tr{border-bottom:1px solid var(--brd)}
+tbody tr:last-child{border:none}
+tbody tr:hover{background:var(--sur2)}
+td{padding:12px 16px;font-size:14px;color:var(--txt)}
+.badge{font-size:11px;font-weight:600;padding:3px 8px;border-radius:20px}
+.r-admin{background:#fee2e2;color:#991b1b}.r-gestor{background:#dbeafe;color:#1e40af}
+.r-tecnico{background:#dcfce7;color:#166534}.r-cliente{background:#fef9c3;color:#854d0e}
+html.dark .r-admin{background:#450a0a;color:#fca5a5}
+html.dark .r-gestor{background:#1e3a5f;color:#93c5fd}
+html.dark .r-tecnico{background:#14532d;color:#86efac}
+html.dark .r-cliente{background:#451a03;color:#fcd34d}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+.dot-on{background:#16a34a}.dot-off{background:#94a3b8}
+.icon-btn{background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:5px;color:var(--txt3);font-size:14px}
+.icon-btn:hover{background:var(--sur2);color:var(--accent)}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center}
+.overlay.open{display:flex}
+.modal{background:var(--sur);border-radius:16px;padding:32px;width:100%;max-width:420px;box-shadow:0 8px 40px rgba(0,0,0,.2)}
+.modal h3{font-size:18px;margin-bottom:20px;color:var(--txt)}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:12px;color:var(--txt2);margin-bottom:4px}
+.field input,.field select{width:100%;padding:8px 10px;border:1.5px solid var(--brd);border-radius:7px;font-size:14px;color:var(--txt);background:var(--sur);outline:none}
+.field input:focus,.field select:focus{border-color:var(--accent)}
+.modal-btns{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+.btn-cancel{background:var(--sur2);border:1px solid var(--brd);color:var(--txt2);padding:8px 16px;border-radius:7px;cursor:pointer;font-size:13px}
+.btn-save{background:var(--accent);color:#fff;border:none;padding:8px 18px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600}
+.hint{font-size:11px;color:var(--txt3);margin-top:3px}
+</style>
+</head>
+<body>
+<nav>
+  <img src="bcm-logo.jpg" alt="BCM" style="height:36px;background:#fff;padding:3px 6px;border-radius:6px">
+  <a href="dash.html" class="nav-btn">← Obras</a>
+  <span class="nav-sep"></span>
+  <span style="font-size:13px;opacity:.8" id="nav-user"></span>
+  <button class="dk-btn" id="dk-btn">🌙</button>
+  <button class="nav-btn" onclick="logout()">Sair</button>
+</nav>
+
+<div class="page">
+  <div class="page-hdr">
+    <h1>Usuários</h1>
+    <span style="flex:1"></span>
+    <button class="btn-new" onclick="openNew()">＋ Novo Usuário</button>
+  </div>
+  <table>
+    <thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Status</th><th></th></tr></thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<div class="overlay" id="ov">
+  <div class="modal">
+    <h3 id="m-title">Novo Usuário</h3>
+    <div class="field"><label>Nome *</label><input id="f-name"></div>
+    <div class="field"><label>E-mail *</label><input id="f-email" type="email"></div>
+    <div class="field">
+      <label>Senha <span id="pw-label">(obrigatório)</span></label>
+      <input id="f-pw" type="password" placeholder="Mínimo 6 caracteres">
+      <div class="hint" id="pw-hint"></div>
+    </div>
+    <div class="field">
+      <label>Perfil *</label>
+      <select id="f-role">
+        <option value="admin">Admin</option>
+        <option value="gestor">Gestor / Engenheiro</option>
+        <option value="tecnico" selected>Técnico de Campo</option>
+        <option value="cliente">Cliente (somente leitura)</option>
+      </select>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
+      <button class="btn-save" onclick="saveUser()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const { createClient } = supabase;
+const sb = createClient('https://fkndewrridhgwwkrjmmc.supabase.co','sb_publishable_49gXUr0vbSdYLcHJXorglg_zVfhREcY');
+const EDGE_URL = 'https://fkndewrridhgwwkrjmmc.supabase.co/functions/v1/create-user';
+
+(function(){const DK='gantt-dark';function apply(on){document.documentElement.classList.toggle('dark',on);const b=document.getElementById('dk-btn');if(b)b.textContent=on?'☀️':'🌙';}apply(localStorage.getItem(DK)==='1');document.getElementById('dk-btn').onclick=function(){const on=!document.documentElement.classList.contains('dark');localStorage.setItem(DK,on?'1':'0');apply(on);};})();
+
+const ROLE = localStorage.getItem('bcm_role');
+let editId = null;
+
+async function init() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session || ROLE !== 'admin') { window.location.href = 'index.html'; return; }
+  document.getElementById('nav-user').textContent = localStorage.getItem('bcm_name') + ' (admin)';
+  load();
+}
+
+async function logout() { await sb.auth.signOut(); localStorage.clear(); window.location.href = 'index.html'; }
+
+const RNAMES = { admin:'Admin', gestor:'Gestor', tecnico:'Técnico', cliente:'Cliente' };
+const RCLS   = { admin:'r-admin', gestor:'r-gestor', tecnico:'r-tecnico', cliente:'r-cliente' };
+
+async function load() {
+  const { data: users } = await sb.from('profiles').select('*').order('name');
+  document.getElementById('tbody').innerHTML = (users||[]).map(u => `
+    <tr>
+      <td>${esc(u.name||'')}</td>
+      <td style="color:var(--txt2)">${esc(u.email||'')}</td>
+      <td><span class="badge ${RCLS[u.role]||''}">${RNAMES[u.role]||u.role}</span></td>
+      <td><span class="dot ${u.active?'dot-on':'dot-off'}"></span>${u.active?'Ativo':'Inativo'}</td>
+      <td>
+        <button class="icon-btn" onclick="editUser('${u.id}','${esc(u.name||'')}','${esc(u.email||'')}','${u.role}')" title="Editar">✏️</button>
+        <button class="icon-btn" onclick="toggleActive('${u.id}',${u.active})" title="${u.active?'Desativar':'Ativar'}">${u.active?'🔒':'🔓'}</button>
+      </td>
+    </tr>`).join('');
+}
+
+function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+function openNew() {
+  editId = null;
+  document.getElementById('m-title').textContent = 'Novo Usuário';
+  document.getElementById('f-name').value = '';
+  document.getElementById('f-email').value = '';
+  document.getElementById('f-pw').value = '';
+  document.getElementById('f-role').value = 'tecnico';
+  document.getElementById('pw-label').textContent = '(obrigatório)';
+  document.getElementById('ov').classList.add('open');
+}
+function editUser(id, name, email, role) {
+  editId = id;
+  document.getElementById('m-title').textContent = 'Editar Usuário';
+  document.getElementById('f-name').value = name;
+  document.getElementById('f-email').value = email;
+  document.getElementById('f-pw').value = '';
+  document.getElementById('f-role').value = role;
+  document.getElementById('pw-label').textContent = '(deixe em branco para não alterar)';
+  document.getElementById('ov').classList.add('open');
+}
+function closeModal() { document.getElementById('ov').classList.remove('open'); }
+document.getElementById('ov').onclick = e => { if(e.target===document.getElementById('ov'))closeModal(); };
+
+async function saveUser() {
+  const name  = document.getElementById('f-name').value.trim();
+  const email = document.getElementById('f-email').value.trim();
+  const pw    = document.getElementById('f-pw').value;
+  const role  = document.getElementById('f-role').value;
+  if (!name || !email) { alert('Nome e e-mail obrigatórios'); return; }
+
+  if (editId) {
+    // Editar: só atualiza perfil (não altera senha nem email via frontend)
+    const upd = { name, role };
+    const { error } = await sb.from('profiles').update(upd).eq('id', editId);
+    if (error) { alert(error.message); return; }
+  } else {
+    // Criar: chama Edge Function
+    if (!pw) { alert('Senha obrigatória para novo usuário'); return; }
+    const { data: { session } } = await sb.auth.getSession();
+    const r = await fetch(EDGE_URL, {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + session.access_token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: pw, name, role })
+    });
+    const d = await r.json();
+    if (!r.ok) { alert(d.error || 'Erro ao criar usuário'); return; }
+  }
+  closeModal();
+  load();
+}
+
+async function toggleActive(id, cur) {
+  if (!confirm(cur ? 'Desativar este usuário?' : 'Reativar este usuário?')) return;
+  await sb.from('profiles').update({ active: !cur }).eq('id', id);
+  load();
+}
+
+init();
+</script>
+</body>
+</html>

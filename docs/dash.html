@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BCM — Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--primary:#0d1f3c;--accent:#0284c7;--bg:#edf1f7;--sur:#fff;--sur2:#f4f7fb;--brd:#dde3ed;--txt:#1e293b;--txt2:#475569;--txt3:#94a3b8}
+html.dark{--bg:#0e1626;--sur:#131f33;--sur2:#182540;--brd:#243050;--txt:#dde4f0;--txt2:#8fa3c0;--txt3:#4d6080}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh}
+nav{background:var(--primary);color:#fff;height:58px;display:flex;align-items:center;padding:0 24px;gap:16px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.nav-logo img{height:36px;background:#fff;padding:3px 6px;border-radius:6px}
+.nav-sep{flex:1}
+.nav-user{font-size:13px;opacity:.85;white-space:nowrap}
+.nav-btn{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);color:#fff;padding:5px 12px;border-radius:6px;font-size:13px;cursor:pointer;text-decoration:none}
+.nav-btn:hover{background:rgba(255,255,255,.25)}
+.dk-btn{background:none;border:1px solid rgba(255,255,255,.3);color:#fff;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:15px}
+.page{max-width:1100px;margin:0 auto;padding:32px 20px}
+.page-hdr{display:flex;align-items:center;gap:12px;margin-bottom:24px}
+.page-hdr h1{font-size:22px;color:var(--primary)}
+html.dark .page-hdr h1{color:var(--txt)}
+.btn-new{background:var(--accent);color:#fff;border:none;padding:8px 18px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:20px}
+.card{background:var(--sur);border-radius:14px;padding:24px;box-shadow:0 2px 12px rgba(0,0,0,.06);border:1px solid var(--brd);cursor:pointer;transition:box-shadow .2s,transform .15s;text-decoration:none;display:block}
+.card:hover{box-shadow:0 6px 24px rgba(2,132,199,.15);transform:translateY(-2px)}
+.card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}
+.card-name{font-size:17px;font-weight:700;color:var(--txt)}
+.card-status{font-size:11px;font-weight:600;padding:3px 8px;border-radius:20px}
+.s-active{background:#dcfce7;color:#166534}.s-paused{background:#fef9c3;color:#854d0e}.s-done{background:#dbeafe;color:#1e40af}
+html.dark .s-active{background:#14532d;color:#86efac}
+html.dark .s-paused{background:#451a03;color:#fcd34d}
+html.dark .s-done{background:#1e3a5f;color:#93c5fd}
+.card-client{font-size:13px;color:var(--txt2);margin-bottom:4px}
+.card-loc,.card-dates{font-size:12px;color:var(--txt3)}
+.card-dates{margin-top:10px}
+.prog-bar{height:6px;background:var(--brd);border-radius:3px;overflow:hidden;margin-top:4px}
+.prog-fill{height:100%;background:var(--accent);border-radius:3px}
+.prog-lbl{display:flex;justify-content:space-between;font-size:11px;color:var(--txt3);margin-top:14px}
+.empty{text-align:center;padding:80px 20px;color:var(--txt2)}
+/* Modal */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center}
+.overlay.open{display:flex}
+.modal{background:var(--sur);border-radius:16px;padding:32px;width:100%;max-width:480px;box-shadow:0 8px 40px rgba(0,0,0,.2)}
+.modal h3{font-size:18px;margin-bottom:20px;color:var(--txt)}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:12px;color:var(--txt2);margin-bottom:4px}
+.field input{width:100%;padding:8px 10px;border:1.5px solid var(--brd);border-radius:7px;font-size:14px;color:var(--txt);background:var(--sur);outline:none}
+.field input:focus{border-color:var(--accent)}
+.modal-btns{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+.btn-cancel{background:var(--sur2);border:1px solid var(--brd);color:var(--txt2);padding:8px 16px;border-radius:7px;cursor:pointer;font-size:13px}
+.btn-save{background:var(--accent);color:#fff;border:none;padding:8px 18px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600}
+</style>
+</head>
+<body>
+<nav>
+  <div class="nav-logo"><img src="bcm-logo.jpg" alt="BCM"></div>
+  <span class="nav-sep"></span>
+  <span class="nav-user" id="nav-user"></span>
+  <a href="users.html" class="nav-btn" id="link-users" style="display:none">Usuários</a>
+  <button class="dk-btn" id="dk-btn">🌙</button>
+  <button class="nav-btn" onclick="logout()">Sair</button>
+</nav>
+<div class="page">
+  <div class="page-hdr">
+    <h1>Minhas Obras</h1>
+    <span style="flex:1"></span>
+    <button class="btn-new" id="btn-new" style="display:none" onclick="openNew()">＋ Nova Obra</button>
+  </div>
+  <div class="grid" id="grid"></div>
+</div>
+
+<div class="overlay" id="ov">
+  <div class="modal">
+    <h3>Nova Obra</h3>
+    <div class="field"><label>Nome *</label><input id="f-name" placeholder="Ex: Fábrica XYZ"></div>
+    <div class="field"><label>Cliente</label><input id="f-client"></div>
+    <div class="field"><label>Local / Cidade</label><input id="f-loc"></div>
+    <div class="field"><label>Início</label><input type="date" id="f-start"></div>
+    <div class="field"><label>Término</label><input type="date" id="f-end"></div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeNew()">Cancelar</button>
+      <button class="btn-save" onclick="saveNew()">Criar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const { createClient } = supabase;
+const sb = createClient('https://fkndewrridhgwwkrjmmc.supabase.co','sb_publishable_49gXUr0vbSdYLcHJXorglg_zVfhREcY');
+
+// Dark mode
+(function(){const DK='gantt-dark';function apply(on){document.documentElement.classList.toggle('dark',on);const b=document.getElementById('dk-btn');if(b)b.textContent=on?'☀️':'🌙';}apply(localStorage.getItem(DK)==='1');document.getElementById('dk-btn').onclick=function(){const on=!document.documentElement.classList.contains('dark');localStorage.setItem(DK,on?'1':'0');apply(on);};})();
+
+const ROLE = localStorage.getItem('bcm_role') || 'tecnico';
+const NAME = localStorage.getItem('bcm_name') || '';
+
+async function init() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) { window.location.href = 'index.html'; return; }
+
+  document.getElementById('nav-user').textContent = NAME + ' (' + ROLE + ')';
+  if (ROLE === 'admin' || ROLE === 'gestor') document.getElementById('btn-new').style.display = 'flex';
+  if (ROLE === 'admin') document.getElementById('link-users').style.display = '';
+  load();
+}
+
+async function logout() { await sb.auth.signOut(); localStorage.clear(); window.location.href = 'index.html'; }
+
+const STATUS_LABEL = { active:'Ativo', paused:'Pausado', done:'Concluído' };
+const STATUS_CLASS  = { active:'s-active', paused:'s-paused', done:'s-done' };
+
+async function load() {
+  const { data: projects } = await sb.from('projects').select('*').order('created_at', { ascending: false });
+  if (!projects?.length) {
+    document.getElementById('grid').innerHTML = '<div class="empty">Nenhuma obra encontrada.</div>';
+    return;
+  }
+  // busca progresso médio de cada projeto
+  const withProgress = await Promise.all(projects.map(async p => {
+    const { data: tasks } = await sb.from('tasks').select('progress').eq('project_id', p.id);
+    const avg = tasks?.length ? Math.round(tasks.reduce((a,t) => a+t.progress, 0) / tasks.length) : 0;
+    return { ...p, avg, total: tasks?.length || 0 };
+  }));
+
+  document.getElementById('grid').innerHTML = withProgress.map(p => `
+    <a class="card" href="project.html?id=${p.id}">
+      <div class="card-top">
+        <div class="card-name">${esc(p.name)}</div>
+        <span class="card-status ${STATUS_CLASS[p.status]||'s-active'}">${STATUS_LABEL[p.status]||'Ativo'}</span>
+      </div>
+      <div class="card-client">${p.client ? '👤 '+esc(p.client) : ''}</div>
+      <div class="card-loc">${p.location ? '📍 '+esc(p.location) : ''}</div>
+      <div class="card-dates">${p.start_date?fmt(p.start_date):''} ${p.start_date&&p.end_date?'→':''} ${p.end_date?fmt(p.end_date):''}</div>
+      <div class="prog-lbl"><span>Progresso</span><span>${p.avg}%</span></div>
+      <div class="prog-bar"><div class="prog-fill" style="width:${p.avg}%"></div></div>
+      <div style="font-size:11px;color:var(--txt3);margin-top:4px">${p.total} tarefas</div>
+    </a>`).join('');
+}
+
+function fmt(d) { if(!d)return''; const[y,m,day]=d.split('-'); return day+'/'+m+'/'+y; }
+function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function openNew() { document.getElementById('ov').classList.add('open'); }
+function closeNew() { document.getElementById('ov').classList.remove('open'); }
+document.getElementById('ov').onclick = e => { if(e.target===document.getElementById('ov'))closeNew(); };
+
+async function saveNew() {
+  const name = document.getElementById('f-name').value.trim();
+  if (!name) { alert('Informe o nome'); return; }
+  const { data: { session } } = await sb.auth.getSession();
+  const { error } = await sb.from('projects').insert({
+    name,
+    client: document.getElementById('f-client').value || null,
+    location: document.getElementById('f-loc').value || null,
+    start_date: document.getElementById('f-start').value || null,
+    end_date: document.getElementById('f-end').value || null,
+    created_by: session.user.id
+  });
+  if (error) { alert(error.message); return; }
+  closeNew();
+  load();
+}
+
+init();
+</script>
+</body>
+</html>

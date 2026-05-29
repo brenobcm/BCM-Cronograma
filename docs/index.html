@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BCM Gantt — Login</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--primary:#0d1f3c;--accent:#0284c7;--bg:#edf1f7;--sur:#fff;--brd:#dde3ed;--txt:#1e293b;--txt2:#475569;--err:#ef4444}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);min-height:100vh;display:flex;align-items:center;justify-content:center}
+.card{background:var(--sur);border-radius:16px;padding:48px 40px;width:100%;max-width:400px;box-shadow:0 4px 32px rgba(0,0,0,.12)}
+.logo-wrap{text-align:center;margin-bottom:32px}
+.logo-wrap img{height:52px;background:#fff;padding:6px 10px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+.logo-wrap .tagline{font-size:13px;color:var(--txt2);margin-top:8px}
+h2{font-size:22px;color:var(--primary);margin-bottom:24px;text-align:center}
+label{display:block;font-size:13px;color:var(--txt2);margin-bottom:4px;margin-top:16px}
+input{width:100%;padding:10px 12px;border:1.5px solid var(--brd);border-radius:8px;font-size:14px;color:var(--txt);transition:border-color .2s;outline:none}
+input:focus{border-color:var(--accent)}
+.btn{width:100%;margin-top:24px;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;transition:opacity .2s}
+.btn:hover{opacity:.9}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.err{color:var(--err);font-size:13px;margin-top:12px;text-align:center;min-height:18px}
+.footer{text-align:center;font-size:12px;color:var(--txt2);margin-top:24px}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo-wrap">
+    <img src="bcm-logo.jpg" alt="BCM">
+    <div class="tagline">Sistema de Gestão de Obras</div>
+  </div>
+  <h2>Acesso ao Sistema</h2>
+  <form id="frm">
+    <label>E-mail</label>
+    <input type="email" id="email" placeholder="seu@email.com" autocomplete="username" required>
+    <label>Senha</label>
+    <input type="password" id="pw" placeholder="••••••••" autocomplete="current-password" required>
+    <button class="btn" type="submit" id="btn">Entrar</button>
+    <div class="err" id="err"></div>
+  </form>
+  <div class="footer">BCM Eletricidade e Automação © 2026</div>
+</div>
+<script>
+const { createClient } = supabase;
+const sb = createClient(
+  'https://fkndewrridhgwwkrjmmc.supabase.co',
+  'sb_publishable_49gXUr0vbSdYLcHJXorglg_zVfhREcY'
+);
+
+// Já logado → vai direto
+sb.auth.getSession().then(({ data: { session } }) => {
+  if (session) window.location.href = 'dash.html';
+});
+
+document.getElementById('frm').onsubmit = async e => {
+  e.preventDefault();
+  const btn = document.getElementById('btn');
+  const err = document.getElementById('err');
+  btn.disabled = true; err.textContent = '';
+
+  const { data, error } = await sb.auth.signInWithPassword({
+    email: document.getElementById('email').value,
+    password: document.getElementById('pw').value,
+  });
+
+  if (error) { err.textContent = 'E-mail ou senha incorretos'; btn.disabled = false; return; }
+
+  // Busca perfil para obter role e nome
+  const { data: profile } = await sb.from('profiles').select('name,role').eq('id', data.user.id).single();
+  localStorage.setItem('bcm_role', profile?.role || 'tecnico');
+  localStorage.setItem('bcm_name', profile?.name || data.user.email);
+
+  window.location.href = 'dash.html';
+};
+</script>
+</body>
+</html>
