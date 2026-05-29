@@ -227,7 +227,11 @@ nav,.tb,.overlay{display:none!important}
   <div class="modal">
     <h3>Nova Tarefa</h3>
     <div class="field"><label>Nome *</label><input id="nt-name"></div>
-    <div class="field"><label>Categoria *</label><select id="nt-cat"></select></div>
+    <div class="field">
+      <label>Categoria * <span style="font-weight:400;color:var(--txt3)">(selecione ou digite nova)</span></label>
+      <input id="nt-cat" list="cats-datalist" placeholder="Ex: ELÉTRICA" autocomplete="off">
+      <datalist id="cats-datalist"></datalist>
+    </div>
     <div class="frow">
       <div class="field"><label>Início *</label><input type="date" id="nt-start"></div>
       <div class="field"><label>Término *</label><input type="date" id="nt-end"></div>
@@ -503,18 +507,20 @@ async function delTask(){
 
 // ─── New Task ────────────────────────────────────────────────
 function openNewTask(){
-  const s=document.getElementById('nt-cat');
-  s.innerHTML=cats.map(c=>`<option>${esc(c)}</option>`).join('');
-  ['nt-name','nt-start','nt-end','nt-resp'].forEach(id=>document.getElementById(id).value='');
+  const dl=document.getElementById('cats-datalist');
+  dl.innerHTML=cats.map(c=>`<option value="${c.replace(/"/g,'&quot;')}">`).join('');
+  ['nt-name','nt-cat','nt-start','nt-end','nt-resp'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('ov-new').classList.add('open');
+  setTimeout(()=>document.getElementById('nt-name').focus(),100);
 }
 async function saveNewTask(){
   const name=document.getElementById('nt-name').value.trim();
+  const cat=document.getElementById('nt-cat').value.trim().toUpperCase();
   const sd=document.getElementById('nt-start').value;
   const ed=document.getElementById('nt-end').value;
-  if(!name||!sd||!ed){alert('Preencha nome, início e término');return;}
+  if(!name||!cat||!sd||!ed){alert('Preencha nome, categoria, início e término');return;}
   const{error}=await sb.from('tasks').insert({
-    project_id:PID,category:document.getElementById('nt-cat').value,
+    project_id:PID,category:cat,
     name,start_date:sd,end_date:ed,
     responsible:document.getElementById('nt-resp').value.trim()||null,
     progress:0,order_idx:999
