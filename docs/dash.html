@@ -100,9 +100,16 @@ async function init() {
   const { data: { session } } = await sb.auth.getSession();
   if (!session) { window.location.href = 'index.html'; return; }
 
-  document.getElementById('nav-user').textContent = NAME + ' (' + ROLE + ')';
-  if (ROLE === 'admin' || ROLE === 'gestor') document.getElementById('btn-new').style.display = 'flex';
-  if (ROLE === 'admin') document.getElementById('link-users').style.display = '';
+  // Busca role sempre do banco (ignora localStorage desatualizado)
+  const { data: profile } = await sb.from('profiles').select('name,role').eq('id', session.user.id).single();
+  const role = profile?.role || 'tecnico';
+  const name = profile?.name || session.user.email;
+  localStorage.setItem('bcm_role', role);
+  localStorage.setItem('bcm_name', name);
+
+  document.getElementById('nav-user').textContent = name + ' (' + role + ')';
+  if (role === 'admin' || role === 'gestor') document.getElementById('btn-new').style.display = 'flex';
+  if (role === 'admin') document.getElementById('link-users').style.display = '';
   load();
 }
 
