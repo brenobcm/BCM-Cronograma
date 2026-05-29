@@ -83,12 +83,15 @@ html.dark .r-cliente{background:#451a03;color:#fcd34d}
     </div>
     <div class="field">
       <label>Perfil *</label>
-      <select id="f-role">
-        <option value="admin">Admin</option>
-        <option value="gestor">Gestor / Engenheiro</option>
-        <option value="tecnico" selected>Técnico de Campo</option>
-        <option value="cliente">Cliente (somente leitura)</option>
+      <select id="f-role" onchange="updateRoleDesc(this.value)">
+        <option value="admin">Admin — Acesso total ao sistema</option>
+        <option value="gestor">Gestor / Engenheiro — Cria e edita obras e tarefas</option>
+        <option value="tecnico" selected>Técnico de Campo — Atualiza progresso das tarefas</option>
+        <option value="cliente">Cliente — Somente visualização, sem edições</option>
       </select>
+      <div id="role-desc" style="margin-top:8px;padding:8px 10px;border-radius:6px;font-size:12px;background:var(--sur2);border:1px solid var(--brd);color:var(--txt2)">
+        👷 Pode atualizar o % de progresso das tarefas. Não pode criar, editar ou excluir tarefas ou obras.
+      </div>
     </div>
     <div class="modal-btns">
       <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
@@ -106,6 +109,17 @@ const EDGE_URL = 'https://fkndewrridhgwwkrjmmc.supabase.co/functions/v1/create-u
 
 const ROLE = localStorage.getItem('bcm_role');
 let editId = null;
+
+const ROLE_DESC = {
+  admin:   '🔑 Acesso total ao sistema: cria usuários, gerencia todas as obras, edita e exclui qualquer dado.',
+  gestor:  '📋 Cria e edita obras, adiciona tarefas, gerencia a equipe do projeto. Não gerencia usuários.',
+  tecnico: '👷 Pode atualizar o % de progresso das tarefas. Não pode criar, editar ou excluir tarefas ou obras.',
+  cliente: '👁️ Somente visualização. Vê o cronograma em tempo real mas não pode alterar nenhum dado.',
+};
+function updateRoleDesc(role){
+  const el = document.getElementById('role-desc');
+  if(el) el.textContent = ROLE_DESC[role] || '';
+}
 
 async function init() {
   const { data: { session } } = await sb.auth.getSession();
@@ -153,6 +167,7 @@ function editUser(id, name, email, role) {
   document.getElementById('f-email').value = email;
   document.getElementById('f-pw').value = '';
   document.getElementById('f-role').value = role;
+  updateRoleDesc(role);
   document.getElementById('pw-label').textContent = '(deixe em branco para não alterar)';
   document.getElementById('ov').classList.add('open');
 }
