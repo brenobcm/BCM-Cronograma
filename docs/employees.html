@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>BCM — Funcionários</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--primary:#0d1f3c;--accent:#0284c7;--bg:#edf1f7;--sur:#fff;--sur2:#f4f7fb;--brd:#dde3ed;--txt:#1e293b;--txt2:#475569;--txt3:#94a3b8;--ok:#16a34a;--err:#dc2626}
@@ -73,6 +74,11 @@ td{padding:12px 16px;font-size:13px;color:var(--txt)}
   <div class="page-hdr">
     <h1>👷 Funcionários</h1>
     <span style="flex:1"></span>
+    <a href="template_funcionarios.xlsx" download class="btn-new" style="background:var(--sur2);color:var(--txt2);border:1.5px solid var(--brd);text-decoration:none;margin-right:8px">⬇ Baixar Template</a>
+    <label class="btn-new" style="background:#166534;cursor:pointer;margin-right:8px">
+      📥 Importar Excel
+      <input type="file" id="import-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="importExcel(this)">
+    </label>
     <button class="btn-new" onclick="openNew()">＋ Novo Funcionário</button>
   </div>
 
@@ -81,6 +87,25 @@ td{padding:12px 16px;font-size:13px;color:var(--txt)}
     <thead><tr><th>Funcionário</th><th>Cargo</th><th>Custo/hora</th><th>H/dia</th><th>Conta no sistema</th><th>Status</th><th></th></tr></thead>
     <tbody id="tbody"></tbody>
   </table>
+</div>
+
+<!-- Import preview modal -->
+<div class="overlay" id="ov-import">
+  <div class="modal" style="max-width:720px">
+    <h3>📥 Importar Funcionários</h3>
+    <div style="margin-bottom:16px;font-size:13px;color:var(--txt2)">Revise os dados antes de confirmar a importação:</div>
+    <div id="import-preview" style="max-height:320px;overflow-y:auto;border:1px solid var(--brd);border-radius:8px;margin-bottom:16px">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead id="import-thead"></thead>
+        <tbody id="import-tbody"></tbody>
+      </table>
+    </div>
+    <div id="import-summary" style="font-size:13px;color:var(--txt2);margin-bottom:16px"></div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="document.getElementById('ov-import').classList.remove('open');document.getElementById('import-input').value=''">Cancelar</button>
+      <button class="btn-save" id="btn-confirm-import" onclick="confirmImport()">✅ Confirmar Importação</button>
+    </div>
+  </div>
 </div>
 
 <!-- Modal -->
@@ -241,6 +266,122 @@ async function toggleActive(id,cur){
   await sb.from('employees').update({active:!cur}).eq('id',id);
   load();
 }
+
+// ── IMPORTAÇÃO EXCEL ───────────────────────────────────────
+let importRows = [];
+
+function importExcel(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+      // Tenta ler a aba "Funcionários" ou a primeira
+      const sheetName = wb.SheetNames.includes('Funcionários') ? 'Funcionários' : wb.SheetNames[0];
+      const ws = wb.Sheets[sheetName];
+      const json = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+      // Encontra linha de cabeçalho (linha com "Nome")
+      let hdrRow = -1;
+      for (let i = 0; i < Math.min(json.length, 10); i++) {
+        const row = json[i].map(c => String(c).toLowerCase());
+        if (row.some(c => c.includes('nome'))) { hdrRow = i; break; }
+      }
+      if (hdrRow === -1) { alert('Cabeçalho não encontrado. Use o template fornecido.'); return; }
+
+      const headers = json[hdrRow].map(h => String(h).trim());
+      const dataRows = json.slice(hdrRow + 1).filter(row => row.some(c => c !== ''));
+
+      // Mapeamento de colunas
+      const idx = {
+        name:    headers.findIndex(h => h.toLowerCase().includes('nome')),
+        email:   headers.findIndex(h => h.toLowerCase().includes('e-mail') || h.toLowerCase().includes('email')),
+        phone:   headers.findIndex(h => h.toLowerCase().includes('telefone')),
+        role:    headers.findIndex(h => h.toLowerCase().includes('cargo') || h.toLowerCase().includes('fun')),
+        rate:    headers.findIndex(h => h.toLowerCase().includes('custo') || h.toLowerCase().includes('hora')),
+        daily:   headers.findIndex(h => h.toLowerCase().includes('horas') || h.toLowerCase().includes('dia')),
+        active:  headers.findIndex(h => h.toLowerCase().includes('ativo')),
+      };
+
+      importRows = dataRows.map((row, i) => {
+        const name = idx.name >= 0 ? String(row[idx.name] || '').trim() : '';
+        if (!name) return null; // pula linhas sem nome
+        // Ignora linha de exemplo (verde)
+        if (name.toLowerCase().includes('joão da silva') || name.toLowerCase().includes('exemplo')) return null;
+        const activeVal = idx.active >= 0 ? String(row[idx.active] || 'SIM').trim().toUpperCase() : 'SIM';
+        return {
+          name,
+          email:       idx.email >= 0  ? String(row[idx.email] || '').trim() || null : null,
+          phone:       idx.phone >= 0  ? String(row[idx.phone] || '').trim() || null : null,
+          role:        idx.role >= 0   ? String(row[idx.role] || '').trim() || null  : null,
+          hourly_rate: idx.rate >= 0   ? parseFloat(String(row[idx.rate] || '0').replace(/[R$\s.]/g,'').replace(',','.')) || 0 : 0,
+          daily_hours: idx.daily >= 0  ? parseFloat(row[idx.daily]) || 9 : 9,
+          active:      activeVal !== 'NÃO' && activeVal !== 'NAO' && activeVal !== 'N',
+        };
+      }).filter(Boolean);
+
+      if (!importRows.length) { alert('Nenhum funcionário encontrado na planilha.'); return; }
+
+      // Preview
+      document.getElementById('import-thead').innerHTML = `
+        <tr style="background:var(--primary)">${['#','Nome','E-mail','Cargo','Custo/h','H/dia','Ativo'].map(h=>`<th style="padding:8px 10px;color:#fff;font-size:11px;text-align:left">${h}</th>`).join('')}</tr>`;
+      document.getElementById('import-tbody').innerHTML = importRows.map((r, i) => `
+        <tr style="border-bottom:1px solid var(--brd);background:${i%2===0?'var(--sur)':'var(--sur2)'}">
+          <td style="padding:6px 10px;color:var(--txt3)">${i+1}</td>
+          <td style="padding:6px 10px;font-weight:600">${esc(r.name)}</td>
+          <td style="padding:6px 10px;color:var(--txt3);font-size:11px">${esc(r.email||'—')}</td>
+          <td style="padding:6px 10px">${esc(r.role||'—')}</td>
+          <td style="padding:6px 10px">R$ ${(r.hourly_rate).toFixed(2)}</td>
+          <td style="padding:6px 10px;text-align:center">${r.daily_hours}h</td>
+          <td style="padding:6px 10px">${r.active?'✅':'❌'}</td>
+        </tr>`).join('');
+
+      document.getElementById('import-summary').innerHTML = `
+        <strong>${importRows.length}</strong> funcionário(s) prontos para importar.
+        <span style="color:var(--txt3)"> Revise os dados acima e confirme.</span>`;
+      document.getElementById('ov-import').classList.add('open');
+    } catch(err) {
+      alert('Erro ao ler o arquivo: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+async function confirmImport() {
+  if (!importRows.length) return;
+  const btn = document.getElementById('btn-confirm-import');
+  btn.disabled = true;
+  btn.textContent = 'Importando...';
+
+  let ok = 0, skip = 0, errors = [];
+  // Insert in batches of 10
+  for (let i = 0; i < importRows.length; i += 10) {
+    const batch = importRows.slice(i, i + 10);
+    const { error } = await sb.from('employees').insert(batch);
+    if (error) {
+      // Try one by one to identify failures
+      for (const row of batch) {
+        const { error: e2 } = await sb.from('employees').insert(row);
+        if (e2) { skip++; errors.push(row.name + ': ' + e2.message); }
+        else ok++;
+      }
+    } else { ok += batch.length; }
+  }
+
+  btn.disabled = false;
+  btn.textContent = '✅ Confirmar Importação';
+  document.getElementById('ov-import').classList.remove('open');
+  document.getElementById('import-input').value = '';
+  importRows = [];
+
+  let msg = `✅ ${ok} funcionário(s) importado(s) com sucesso!`;
+  if (skip) msg += `\n⚠️ ${skip} ignorado(s): ${errors.slice(0,3).join(' | ')}`;
+  alert(msg);
+  load();
+}
+
+document.getElementById('ov-import').onclick = e => { if(e.target.id==='ov-import') document.getElementById('ov-import').classList.remove('open'); };
 
 init();
 </script>
