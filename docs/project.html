@@ -688,7 +688,7 @@ async function saveNewTask(){
       const end=addWorkDays(curStart,days-1);
       const row={project_id:PID,category:cat,name:a.name,
         start_date:curStart,end_date:end,
-        duration:a.std_hours||0,responsible:null,progress:0,order_idx:Date.now()+i};
+        duration:a.std_hours||0,responsible:null,progress:0,order_idx:9000+i};
       curStart=addWorkDays(end,1); // next starts day after
       return row;
     });
