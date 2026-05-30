@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BCM — Tipos de Painel</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--primary:#0d1f3c;--accent:#0284c7;--bg:#edf1f7;--sur:#fff;--sur2:#f4f7fb;--brd:#dde3ed;--txt:#1e293b;--txt2:#475569;--txt3:#94a3b8}
+html.dark{--bg:#0e1626;--sur:#131f33;--sur2:#182540;--brd:#243050;--txt:#dde4f0;--txt2:#8fa3c0;--txt3:#4d6080}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--txt)}
+nav{background:var(--primary);color:#fff;height:58px;display:flex;align-items:center;padding:0 24px;gap:12px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.nav-sep{flex:1}.nav-btn{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);color:#fff;padding:5px 12px;border-radius:6px;font-size:13px;cursor:pointer;text-decoration:none}
+.dk-btn{background:none;border:1px solid rgba(255,255,255,.3);color:#fff;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:15px}
+.page{max-width:1200px;margin:0 auto;padding:28px 20px}
+.page-hdr{display:flex;align-items:center;margin-bottom:24px;gap:12px}
+.page-hdr h1{font-size:22px}
+.btn-new{background:var(--accent);color:#fff;border:none;padding:8px 18px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer}
+.layout{display:grid;grid-template-columns:320px 1fr;gap:20px}
+/* Panel list */
+.panel-list{background:var(--sur);border-radius:12px;border:1px solid var(--brd);overflow:hidden}
+.panel-list-hdr{background:var(--primary);color:#fff;padding:12px 16px;font-size:13px;font-weight:600;display:flex;justify-content:space-between;align-items:center}
+.panel-item{padding:14px 16px;border-bottom:1px solid var(--brd);cursor:pointer;display:flex;align-items:center;gap:10px}
+.panel-item:last-child{border:none}
+.panel-item:hover,.panel-item.active{background:var(--sur2)}
+.panel-item.active{border-left:3px solid var(--accent)}
+.panel-code{font-size:11px;font-weight:700;background:var(--accent);color:#fff;padding:2px 7px;border-radius:4px}
+.panel-name{font-size:13px;font-weight:600}
+.panel-sub{font-size:11px;color:var(--txt3);margin-top:2px}
+/* Activities */
+.act-panel{background:var(--sur);border-radius:12px;border:1px solid var(--brd);overflow:hidden}
+.act-hdr{background:var(--primary);color:#fff;padding:12px 16px;font-size:13px;font-weight:600;display:flex;justify-content:space-between;align-items:center}
+table{width:100%;border-collapse:collapse}
+thead th{background:var(--sur2);font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:10px 16px;text-align:left;color:var(--txt2);border-bottom:1px solid var(--brd)}
+tbody tr{border-bottom:1px solid var(--brd)}
+tbody tr:last-child{border:none}
+tbody tr:hover{background:var(--sur2)}
+td{padding:10px 16px;font-size:13px}
+.icon-btn{background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:5px;color:var(--txt3);font-size:13px}
+.icon-btn:hover{color:var(--accent)}
+.drag-handle{cursor:grab;color:var(--txt3);margin-right:6px}
+/* Modal */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center}
+.overlay.open{display:flex}
+.modal{background:var(--sur);border-radius:16px;padding:28px;width:100%;max-width:460px;box-shadow:0 8px 40px rgba(0,0,0,.2)}
+.modal h3{font-size:16px;margin-bottom:16px}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:12px;color:var(--txt2);margin-bottom:4px}
+.field input,.field textarea{width:100%;padding:8px 10px;border:1.5px solid var(--brd);border-radius:7px;font-size:13px;color:var(--txt);background:var(--sur);outline:none}
+.field input:focus{border-color:var(--accent)}
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.modal-btns{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}
+.btn-cancel{background:var(--sur2);border:1px solid var(--brd);color:var(--txt2);padding:7px 14px;border-radius:7px;cursor:pointer;font-size:13px}
+.btn-save{background:var(--accent);color:#fff;border:none;padding:7px 16px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600}
+.btn-del{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;padding:7px 12px;border-radius:7px;cursor:pointer;font-size:13px;margin-right:auto}
+.empty{text-align:center;padding:40px;color:var(--txt3)}
+</style>
+</head>
+<body>
+<nav>
+  <img src="bcm-logo.jpg" alt="BCM" style="height:36px;background:#fff;padding:3px 6px;border-radius:6px">
+  <a href="dash.html" class="nav-btn">← Obras</a>
+  <span class="nav-sep"></span>
+  <span style="font-size:13px;opacity:.8" id="nav-user"></span>
+  <button class="dk-btn" id="dk-btn">🌙</button>
+  <button class="nav-btn" onclick="logout()">Sair</button>
+</nav>
+
+<div class="page">
+  <div class="page-hdr">
+    <h1>⚡ Tipos de Painel</h1>
+    <span style="flex:1"></span>
+    <button class="btn-new" onclick="openNewPanel()">＋ Novo Tipo</button>
+  </div>
+  <div class="layout">
+    <div class="panel-list">
+      <div class="panel-list-hdr">
+        <span>Tipos Cadastrados</span>
+        <span id="panel-count" style="font-size:11px;opacity:.7"></span>
+      </div>
+      <div id="panel-items"></div>
+    </div>
+    <div class="act-panel">
+      <div class="act-hdr">
+        <span id="act-title">Selecione um tipo de painel</span>
+        <button class="btn-new" id="btn-new-act" style="display:none;padding:5px 12px;font-size:12px" onclick="openNewActivity()">＋ Atividade</button>
+      </div>
+      <div id="act-body">
+        <div class="empty">← Selecione um tipo de painel para ver suas atividades padrão</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Panel modal -->
+<div class="overlay" id="ov-panel">
+  <div class="modal">
+    <h3 id="pm-title">Novo Tipo de Painel</h3>
+    <div class="frow">
+      <div class="field"><label>Código *</label><input id="p-code" placeholder="Ex: QGBT"></div>
+      <div class="field"><label>Nome *</label><input id="p-name" placeholder="Ex: Quadro Geral BT"></div>
+    </div>
+    <div class="field"><label>Descrição</label><input id="p-desc" placeholder="Descrição opcional"></div>
+    <div class="modal-btns">
+      <button class="btn-del" id="p-del" style="display:none" onclick="deletePanel()">Excluir</button>
+      <button class="btn-cancel" onclick="closePanel()">Cancelar</button>
+      <button class="btn-save" onclick="savePanel()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Activity modal -->
+<div class="overlay" id="ov-act">
+  <div class="modal">
+    <h3 id="am-title">Nova Atividade</h3>
+    <div class="field"><label>Nome da Atividade *</label><input id="a-name" placeholder="Ex: Montagem estrutura"></div>
+    <div class="frow">
+      <div class="field"><label>Horas Padrão</label><input id="a-hours" type="number" min="0" step="0.5" placeholder="0"></div>
+      <div class="field"><label>Custo Unitário (R$)</label><input id="a-cost" type="number" min="0" step="0.01" placeholder="0,00"></div>
+    </div>
+    <div class="field"><label>Descrição</label><input id="a-desc" placeholder="Detalhes opcionais"></div>
+    <div class="modal-btns">
+      <button class="btn-del" id="a-del" style="display:none" onclick="deleteActivity()">Excluir</button>
+      <button class="btn-cancel" onclick="closeActivity()">Cancelar</button>
+      <button class="btn-save" onclick="saveActivity()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const{createClient}=supabase;
+const sb=createClient('https://fkndewrridhgwwkrjmmc.supabase.co','sb_publishable_49gXUr0vbSdYLcHJXorglg_zVfhREcY');
+(function(){const DK='gantt-dark';function apply(on){document.documentElement.classList.toggle('dark',on);const b=document.getElementById('dk-btn');if(b)b.textContent=on?'☀️':'🌙';}apply(localStorage.getItem(DK)==='1');document.getElementById('dk-btn').onclick=function(){const on=!document.documentElement.classList.contains('dark');localStorage.setItem(DK,on?'1':'0');apply(on);};})();
+
+const ROLE=localStorage.getItem('bcm_role');
+let selectedPanel=null, editPanelId=null, editActId=null;
+
+async function init(){
+  const{data:{session}}=await sb.auth.getSession();
+  if(!session||ROLE==='cliente'){window.location.href='dash.html';return;}
+  document.getElementById('nav-user').textContent=(localStorage.getItem('bcm_name')||'')+' ('+ROLE+')';
+  loadPanels();
+}
+async function logout(){await sb.auth.signOut();localStorage.clear();window.location.href='index.html';}
+function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+async function loadPanels(){
+  const{data:panels}=await sb.from('panel_types').select('*').order('code');
+  const list=panels||[];
+  document.getElementById('panel-count').textContent=list.length+' tipos';
+  document.getElementById('panel-items').innerHTML=list.length?list.map(p=>`
+    <div class="panel-item${selectedPanel?.id===p.id?' active':''}" onclick='selectPanel(${JSON.stringify(p)})'>
+      <span class="panel-code">${esc(p.code)}</span>
+      <div><div class="panel-name">${esc(p.name)}</div><div class="panel-sub">${esc(p.description||'')}</div></div>
+      <button class="icon-btn" style="margin-left:auto" onclick='event.stopPropagation();editPanel(${JSON.stringify(p)})'>✏️</button>
+    </div>`).join(''):'<div class="empty">Nenhum tipo cadastrado.<br>Clique em "+ Novo Tipo" para começar.</div>';
+  if(selectedPanel) loadActivities(selectedPanel.id);
+}
+
+async function selectPanel(p){
+  selectedPanel=p;
+  document.getElementById('act-title').textContent=p.code+' — '+p.name;
+  document.getElementById('btn-new-act').style.display='';
+  document.querySelectorAll('.panel-item').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.panel-item').forEach(el=>{
+    if(el.querySelector('.panel-name')?.textContent===p.name)el.classList.add('active');
+  });
+  loadActivities(p.id);
+}
+
+async function loadActivities(panelId){
+  const{data:acts}=await sb.from('panel_activities').select('*').eq('panel_type_id',panelId).order('order_idx').order('id');
+  const list=acts||[];
+  const totalH=list.reduce((a,x)=>a+(+x.std_hours||0),0);
+  document.getElementById('act-body').innerHTML=list.length?`
+    <table>
+      <thead><tr><th>#</th><th>Atividade</th><th>Horas Padrão</th><th>Custo Unit.</th><th></th></tr></thead>
+      <tbody>${list.map((a,i)=>`
+        <tr>
+          <td style="color:var(--txt3);width:32px">${i+1}</td>
+          <td><div style="font-weight:600">${esc(a.name)}</div>${a.description?`<div style="font-size:11px;color:var(--txt3)">${esc(a.description)}</div>`:''}</td>
+          <td style="font-weight:600;color:var(--accent)">${a.std_hours||0}h</td>
+          <td style="color:var(--txt2)">R$ ${(+a.unit_cost||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+          <td><button class="icon-btn" onclick='editAct(${JSON.stringify(a)})'>✏️</button></td>
+        </tr>`).join('')}
+      </tbody>
+      <tfoot><tr style="background:var(--sur2)">
+        <td colspan="2" style="padding:10px 16px;font-weight:700;color:var(--txt2)">TOTAL</td>
+        <td style="padding:10px 16px;font-weight:700;color:var(--accent)">${totalH.toFixed(1)}h</td>
+        <td colspan="2"></td>
+      </tr></tfoot>
+    </table>`:'<div class="empty">Nenhuma atividade cadastrada para este tipo.</div>';
+}
+
+// Panel CRUD
+function openNewPanel(){editPanelId=null;document.getElementById('pm-title').textContent='Novo Tipo de Painel';document.getElementById('p-del').style.display='none';['p-code','p-name','p-desc'].forEach(id=>document.getElementById(id).value='');document.getElementById('ov-panel').classList.add('open');}
+function editPanel(p){editPanelId=p.id;document.getElementById('pm-title').textContent='Editar Tipo';document.getElementById('p-del').style.display=ROLE==='admin'?'':'none';document.getElementById('p-code').value=p.code||'';document.getElementById('p-name').value=p.name||'';document.getElementById('p-desc').value=p.description||'';document.getElementById('ov-panel').classList.add('open');}
+function closePanel(){document.getElementById('ov-panel').classList.remove('open');}
+async function savePanel(){
+  const code=document.getElementById('p-code').value.trim().toUpperCase();
+  const name=document.getElementById('p-name').value.trim();
+  if(!code||!name){alert('Código e nome obrigatórios');return;}
+  const body={code,name,description:document.getElementById('p-desc').value.trim()||null};
+  const err=editPanelId?(await sb.from('panel_types').update(body).eq('id',editPanelId)).error:(await sb.from('panel_types').insert(body)).error;
+  if(err){alert(err.message);return;}
+  closePanel();loadPanels();
+}
+async function deletePanel(){if(!editPanelId||!confirm('Excluir este tipo? Todas as atividades serão removidas.'))return;await sb.from('panel_types').delete().eq('id',editPanelId);selectedPanel=null;closePanel();loadPanels();}
+
+// Activity CRUD
+function openNewActivity(){editActId=null;document.getElementById('am-title').textContent='Nova Atividade';document.getElementById('a-del').style.display='none';['a-name','a-hours','a-cost','a-desc'].forEach(id=>document.getElementById(id).value='');document.getElementById('ov-act').classList.add('open');}
+function editAct(a){editActId=a.id;document.getElementById('am-title').textContent='Editar Atividade';document.getElementById('a-del').style.display=ROLE==='admin'?'':'none';document.getElementById('a-name').value=a.name||'';document.getElementById('a-hours').value=a.std_hours||0;document.getElementById('a-cost').value=a.unit_cost||0;document.getElementById('a-desc').value=a.description||'';document.getElementById('ov-act').classList.add('open');}
+function closeActivity(){document.getElementById('ov-act').classList.remove('open');}
+async function saveActivity(){
+  if(!selectedPanel){alert('Selecione um tipo de painel primeiro');return;}
+  const name=document.getElementById('a-name').value.trim();
+  if(!name){alert('Informe o nome da atividade');return;}
+  const body={panel_type_id:selectedPanel.id,name,std_hours:parseFloat(document.getElementById('a-hours').value)||0,unit_cost:parseFloat(document.getElementById('a-cost').value)||0,description:document.getElementById('a-desc').value.trim()||null,order_idx:editActId?undefined:999};
+  const err=editActId?(await sb.from('panel_activities').update(body).eq('id',editActId)).error:(await sb.from('panel_activities').insert(body)).error;
+  if(err){alert(err.message);return;}
+  closeActivity();loadActivities(selectedPanel.id);
+}
+async function deleteActivity(){if(!editActId||!confirm('Excluir esta atividade?'))return;await sb.from('panel_activities').delete().eq('id',editActId);closeActivity();loadActivities(selectedPanel.id);}
+
+['ov-panel','ov-act'].forEach(id=>{document.getElementById(id).onclick=e=>{if(e.target.id===id)document.getElementById(id).classList.remove('open');};});
+init();
+</script>
+</body>
+</html>

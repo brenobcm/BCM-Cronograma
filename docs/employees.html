@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BCM — Funcionários</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--primary:#0d1f3c;--accent:#0284c7;--bg:#edf1f7;--sur:#fff;--sur2:#f4f7fb;--brd:#dde3ed;--txt:#1e293b;--txt2:#475569;--txt3:#94a3b8;--ok:#16a34a;--err:#dc2626}
+html.dark{--bg:#0e1626;--sur:#131f33;--sur2:#182540;--brd:#243050;--txt:#dde4f0;--txt2:#8fa3c0;--txt3:#4d6080}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--txt)}
+nav{background:var(--primary);color:#fff;height:58px;display:flex;align-items:center;padding:0 24px;gap:12px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.nav-sep{flex:1}
+.nav-btn{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);color:#fff;padding:5px 12px;border-radius:6px;font-size:13px;cursor:pointer;text-decoration:none}
+.dk-btn{background:none;border:1px solid rgba(255,255,255,.3);color:#fff;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:15px}
+.page{max-width:1100px;margin:0 auto;padding:28px 20px}
+.page-hdr{display:flex;align-items:center;margin-bottom:24px;gap:12px}
+.page-hdr h1{font-size:22px}
+.btn-new{background:var(--accent);color:#fff;border:none;padding:8px 18px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer}
+
+/* Stats */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-bottom:24px}
+.stat{background:var(--sur);border-radius:12px;padding:16px 20px;border:1px solid var(--brd)}
+.stat .val{font-size:24px;font-weight:700;color:var(--accent)}
+.stat .lbl{font-size:12px;color:var(--txt3);margin-top:2px}
+
+/* Table */
+table{width:100%;border-collapse:collapse;background:var(--sur);border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.06)}
+thead{background:var(--primary)}
+thead th{color:#fff;font-size:12px;text-transform:uppercase;letter-spacing:.05em;padding:12px 16px;text-align:left;font-weight:600}
+tbody tr{border-bottom:1px solid var(--brd)}
+tbody tr:last-child{border:none}
+tbody tr:hover{background:var(--sur2)}
+td{padding:12px 16px;font-size:13px;color:var(--txt)}
+.avatar{width:34px;height:34px;border-radius:50%;background:var(--accent);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0}
+.role-tag{font-size:11px;padding:2px 8px;border-radius:10px;background:var(--sur2);color:var(--txt2);border:1px solid var(--brd)}
+.rate{font-weight:700;color:var(--ok)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}
+.dot-on{background:#16a34a}.dot-off{background:#94a3b8}
+.icon-btn{background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:5px;color:var(--txt3);font-size:14px}
+.icon-btn:hover{background:var(--sur2);color:var(--accent)}
+
+/* Modal */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center}
+.overlay.open{display:flex}
+.modal{background:var(--sur);border-radius:16px;padding:32px;width:100%;max-width:520px;box-shadow:0 8px 40px rgba(0,0,0,.2);max-height:90vh;overflow-y:auto}
+.modal h3{font-size:18px;margin-bottom:20px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.field{margin-bottom:0}
+.field.full{grid-column:1/-1}
+.field label{display:block;font-size:12px;color:var(--txt2);margin-bottom:4px}
+.field input,.field select{width:100%;padding:8px 10px;border:1.5px solid var(--brd);border-radius:7px;font-size:13px;color:var(--txt);background:var(--sur);outline:none}
+.field input:focus,.field select:focus{border-color:var(--accent)}
+.modal-btns{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+.btn-cancel{background:var(--sur2);border:1px solid var(--brd);color:var(--txt2);padding:8px 16px;border-radius:7px;cursor:pointer;font-size:13px}
+.btn-save{background:var(--accent);color:#fff;border:none;padding:8px 18px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600}
+.btn-del{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;padding:8px 14px;border-radius:7px;cursor:pointer;font-size:13px;margin-right:auto}
+.hint{font-size:11px;color:var(--txt3);margin-top:3px}
+</style>
+</head>
+<body>
+<nav>
+  <img src="bcm-logo.jpg" alt="BCM" style="height:36px;background:#fff;padding:3px 6px;border-radius:6px">
+  <a href="dash.html" class="nav-btn">← Obras</a>
+  <span class="nav-sep"></span>
+  <span style="font-size:13px;opacity:.8" id="nav-user"></span>
+  <button class="dk-btn" id="dk-btn">🌙</button>
+  <button class="nav-btn" onclick="logout()">Sair</button>
+</nav>
+
+<div class="page">
+  <div class="page-hdr">
+    <h1>👷 Funcionários</h1>
+    <span style="flex:1"></span>
+    <button class="btn-new" onclick="openNew()">＋ Novo Funcionário</button>
+  </div>
+
+  <div class="stats" id="stats"></div>
+  <table>
+    <thead><tr><th>Funcionário</th><th>Cargo</th><th>Custo/hora</th><th>H/dia</th><th>Conta no sistema</th><th>Status</th><th></th></tr></thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<!-- Modal -->
+<div class="overlay" id="ov">
+  <div class="modal">
+    <h3 id="m-title">Novo Funcionário</h3>
+    <div class="form-grid">
+      <div class="field full"><label>Nome Completo *</label><input id="f-name" placeholder="Ex: João Silva"></div>
+      <div class="field"><label>E-mail</label><input id="f-email" type="email" placeholder="joao@bcm.com.br"></div>
+      <div class="field"><label>Telefone</label><input id="f-phone" placeholder="(11) 99999-9999"></div>
+      <div class="field"><label>Cargo / Função</label>
+        <input id="f-role" list="roles-list" placeholder="Ex: Eletricista">
+        <datalist id="roles-list">
+          <option>Engenheiro Eletricista</option><option>Técnico em Automação</option>
+          <option>Eletricista Industrial</option><option>Programador CLP</option>
+          <option>Assistente Técnico</option><option>Supervisor de Obras</option>
+          <option>Auxiliar Elétrico</option><option>Projetista</option>
+        </datalist>
+      </div>
+      <div class="field"><label>Custo por Hora (R$)</label><input id="f-rate" type="number" min="0" step="0.01" placeholder="0,00"></div>
+      <div class="field"><label>Horas por Dia Útil</label><input id="f-daily" type="number" min="1" max="24" step="0.5" value="9"></div>
+      <div class="field full">
+        <label>Conta no Sistema (opcional)</label>
+        <select id="f-user">
+          <option value="">— Sem vínculo —</option>
+        </select>
+        <div class="hint">Vincula este funcionário a um usuário do sistema para rastreamento automático de horas.</div>
+      </div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-del" id="btn-del" style="display:none" onclick="deleteEmployee()">Excluir</button>
+      <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
+      <button class="btn-save" onclick="saveEmployee()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const { createClient } = supabase;
+const sb = createClient('https://fkndewrridhgwwkrjmmc.supabase.co','sb_publishable_49gXUr0vbSdYLcHJXorglg_zVfhREcY');
+
+(function(){const DK='gantt-dark';function apply(on){document.documentElement.classList.toggle('dark',on);const b=document.getElementById('dk-btn');if(b)b.textContent=on?'☀️':'🌙';}apply(localStorage.getItem(DK)==='1');document.getElementById('dk-btn').onclick=function(){const on=!document.documentElement.classList.contains('dark');localStorage.setItem(DK,on?'1':'0');apply(on);};})();
+
+const ROLE=localStorage.getItem('bcm_role');
+let editId=null, users=[];
+
+async function init(){
+  const{data:{session}}=await sb.auth.getSession();
+  if(!session||ROLE==='cliente'){window.location.href='dash.html';return;}
+  document.getElementById('nav-user').textContent=(localStorage.getItem('bcm_name')||'')+' ('+ROLE+')';
+  const{data:u}=await sb.from('profiles').select('id,name,email');
+  users=u||[];
+  load();
+}
+async function logout(){await sb.auth.signOut();localStorage.clear();window.location.href='index.html';}
+
+function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function fmt(n){return'R$ '+(+n||0).toLocaleString('pt-BR',{minimumFractionDigits:2});}
+function initials(n){return(n||'?').split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();}
+
+async function load(){
+  const{data:emps}=await sb.from('employees').select('*').order('name');
+  const list=emps||[];
+  // stats
+  const active=list.filter(e=>e.active);
+  const avgRate=active.length?active.reduce((a,e)=>a+(+e.hourly_rate||0),0)/active.length:0;
+  document.getElementById('stats').innerHTML=`
+    <div class="stat"><div class="val">${active.length}</div><div class="lbl">Funcionários Ativos</div></div>
+    <div class="stat"><div class="val">${list.length-active.length}</div><div class="lbl">Inativos</div></div>
+    <div class="stat"><div class="val">${fmt(avgRate)}</div><div class="lbl">Custo Médio/hora</div></div>
+    <div class="stat"><div class="val">${active.reduce((a,e)=>a+(+e.daily_hours||9),0).toFixed(0)}h</div><div class="lbl">Total H/dia (equipe)</div></div>
+  `;
+  const userMap={};users.forEach(u=>{userMap[u.id]={name:u.name,email:u.email};});
+  document.getElementById('tbody').innerHTML=list.length?list.map(e=>`
+    <tr>
+      <td><div style="display:flex;align-items:center;gap:10px">
+        <span class="avatar">${initials(e.name)}</span>
+        <div><div style="font-weight:600">${esc(e.name)}</div><div style="font-size:11px;color:var(--txt3)">${esc(e.email||'')}</div></div>
+      </div></td>
+      <td><span class="role-tag">${esc(e.role||'—')}</span></td>
+      <td><span class="rate">${fmt(e.hourly_rate)}</span></td>
+      <td style="text-align:center">${e.daily_hours||9}h</td>
+      <td style="font-size:12px;color:var(--txt3)">${e.user_id&&userMap[e.user_id]?'🔗 '+esc(userMap[e.user_id].name):'—'}</td>
+      <td><span class="dot ${e.active?'dot-on':'dot-off'}"></span>${e.active?'Ativo':'Inativo'}</td>
+      <td>
+        <button class="icon-btn" onclick='editEmp(${JSON.stringify(e)})' title="Editar">✏️</button>
+        <button class="icon-btn" onclick="toggleActive(${e.id},${e.active})" title="${e.active?'Desativar':'Ativar'}">${e.active?'🔒':'🔓'}</button>
+      </td>
+    </tr>`).join(''):'<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--txt3)">Nenhum funcionário cadastrado.</td></tr>';
+}
+
+function populateUserSelect(selectedId=''){
+  const sel=document.getElementById('f-user');
+  sel.innerHTML='<option value="">— Sem vínculo —</option>'+
+    users.map(u=>`<option value="${u.id}"${u.id===selectedId?' selected':''}>${esc(u.name)} (${esc(u.email)})</option>`).join('');
+}
+
+function openNew(){
+  editId=null;
+  document.getElementById('m-title').textContent='Novo Funcionário';
+  document.getElementById('btn-del').style.display='none';
+  ['f-name','f-email','f-phone','f-role','f-rate'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f-daily').value='9';
+  populateUserSelect();
+  document.getElementById('ov').classList.add('open');
+}
+function editEmp(e){
+  editId=e.id;
+  document.getElementById('m-title').textContent='Editar Funcionário';
+  document.getElementById('btn-del').style.display=ROLE==='admin'?'':'none';
+  document.getElementById('f-name').value=e.name||'';
+  document.getElementById('f-email').value=e.email||'';
+  document.getElementById('f-phone').value=e.phone||'';
+  document.getElementById('f-role').value=e.role||'';
+  document.getElementById('f-rate').value=e.hourly_rate||0;
+  document.getElementById('f-daily').value=e.daily_hours||9;
+  populateUserSelect(e.user_id||'');
+  document.getElementById('ov').classList.add('open');
+}
+function closeModal(){document.getElementById('ov').classList.remove('open');}
+document.getElementById('ov').onclick=e=>{if(e.target===document.getElementById('ov'))closeModal();};
+
+async function saveEmployee(){
+  const name=document.getElementById('f-name').value.trim();
+  if(!name){alert('Informe o nome');return;}
+  const body={
+    name,
+    email:document.getElementById('f-email').value.trim()||null,
+    phone:document.getElementById('f-phone').value.trim()||null,
+    role:document.getElementById('f-role').value.trim()||null,
+    hourly_rate:parseFloat(document.getElementById('f-rate').value)||0,
+    daily_hours:parseFloat(document.getElementById('f-daily').value)||9,
+    user_id:document.getElementById('f-user').value||null,
+  };
+  let err;
+  if(editId){({error:err}=await sb.from('employees').update(body).eq('id',editId));}
+  else{({error:err}=await sb.from('employees').insert(body));}
+  if(err){alert(err.message);return;}
+  closeModal();load();
+}
+async function deleteEmployee(){
+  if(!editId||!confirm('Excluir este funcionário?'))return;
+  await sb.from('employees').delete().eq('id',editId);
+  closeModal();load();
+}
+async function toggleActive(id,cur){
+  if(!confirm(cur?'Desativar este funcionário?':'Reativar?'))return;
+  await sb.from('employees').update({active:!cur}).eq('id',id);
+  load();
+}
+
+init();
+</script>
+</body>
+</html>

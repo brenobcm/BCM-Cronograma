@@ -155,6 +155,8 @@ nav,.tb,.overlay{display:none!important}
   <span class="nav-sep"></span>
   <span style="font-size:12px;opacity:.8" id="nav-user"></span>
   <button class="nav-btn" id="btn-members" style="display:none" onclick="openMembers()">👥 Equipe</button>
+  <a id="btn-budget" href="#" class="nav-btn" style="display:none">💰 Orçamento</a>
+  <a id="btn-reports" href="#" class="nav-btn">📊 Relatórios</a>
   <button class="nav-btn" onclick="printGantt()">🖨 Imprimir</button>
   <button class="dk-btn" id="dk-btn">🌙</button>
   <button class="nav-btn" onclick="logout()">Sair</button>
@@ -277,6 +279,9 @@ const COLORS=['#3b82f6','#8b5cf6','#10b981','#f59e0b','#ef4444','#06b6d4','#ec48
 document.getElementById('nav-user').textContent = (localStorage.getItem('bcm_name')||'')+' ('+ROLE+')';
 if(CAN_EDIT) document.getElementById('btn-new-task').style.display='';
 if(CAN_EDIT) document.getElementById('btn-members').style.display='';
+if(CAN_EDIT) document.getElementById('btn-budget').style.display='';
+document.getElementById('btn-budget').href='budget.html?pid='+PID;
+document.getElementById('btn-reports').href='reports.html?pid='+PID;
 
 async function init() {
   const { data: { session } } = await sb.auth.getSession();

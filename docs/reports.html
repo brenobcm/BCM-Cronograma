@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BCM — Relatórios</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--primary:#0d1f3c;--accent:#0284c7;--bg:#edf1f7;--sur:#fff;--sur2:#f4f7fb;--brd:#dde3ed;--txt:#1e293b;--txt2:#475569;--txt3:#94a3b8;--ok:#16a34a;--warn:#d97706;--err:#dc2626}
+html.dark{--bg:#0e1626;--sur:#131f33;--sur2:#182540;--brd:#243050;--txt:#dde4f0;--txt2:#8fa3c0;--txt3:#4d6080}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--txt)}
+nav{background:var(--primary);color:#fff;height:58px;display:flex;align-items:center;padding:0 24px;gap:12px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.nav-sep{flex:1}.nav-btn{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);color:#fff;padding:5px 12px;border-radius:6px;font-size:13px;cursor:pointer;text-decoration:none}
+.dk-btn{background:none;border:1px solid rgba(255,255,255,.3);color:#fff;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:15px}
+select.proj-sel{padding:7px 12px;border:1.5px solid rgba(255,255,255,.3);border-radius:8px;font-size:14px;background:rgba(255,255,255,.1);color:#fff;outline:none}
+select.proj-sel option{color:var(--txt);background:var(--sur)}
+
+.page{max-width:1300px;margin:0 auto;padding:24px 20px}
+/* Tabs */
+.tabs{display:flex;gap:4px;margin-bottom:24px;background:var(--sur);border-radius:10px;padding:4px;border:1px solid var(--brd);width:fit-content}
+.tab{padding:8px 20px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;border:none;background:none;color:var(--txt2)}
+.tab.on{background:var(--primary);color:#fff}
+.tab-pane{display:none}.tab-pane.on{display:block}
+
+/* KPIs */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:24px}
+.kpi{background:var(--sur);border-radius:12px;padding:16px 18px;border:1px solid var(--brd);border-top:4px solid var(--accent)}
+.kpi.ok{border-top-color:var(--ok)}.kpi.warn{border-top-color:var(--warn)}.kpi.err{border-top-color:var(--err)}
+.kpi .val{font-size:22px;font-weight:700}
+.kpi .lbl{font-size:10px;text-transform:uppercase;color:var(--txt3);letter-spacing:.05em;margin-top:2px}
+.kpi .sub{font-size:11px;color:var(--txt2);margin-top:4px}
+
+/* Cards */
+.card{background:var(--sur);border-radius:12px;padding:20px;border:1px solid var(--brd);margin-bottom:20px}
+.card h3{font-size:14px;font-weight:600;color:var(--txt2);margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px}
+
+/* Table */
+table{width:100%;border-collapse:collapse}
+thead th{background:var(--primary);color:#fff;font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:10px 14px;text-align:left}
+tbody tr{border-bottom:1px solid var(--brd)}
+tbody tr:hover{background:var(--sur2)}
+td{padding:10px 14px;font-size:13px}
+
+/* Status badges */
+.badge{font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600}
+.on-track{background:#dcfce7;color:#166534}.delayed{background:#fee2e2;color:#991b1b}.at-risk{background:#fef9c3;color:#854d0e}.done{background:#dbeafe;color:#1e40af}
+html.dark .on-track{background:#14532d;color:#86efac}
+html.dark .delayed{background:#450a0a;color:#fca5a5}
+html.dark .at-risk{background:#451a03;color:#fcd34d}
+html.dark .done{background:#1e3a5f;color:#93c5fd}
+
+/* Progress bar */
+.pbar{height:8px;background:var(--brd);border-radius:4px;overflow:hidden;margin-top:4px}
+.pfill{height:100%;border-radius:4px}
+.pfill.ok{background:var(--ok)}.pfill.warn{background:var(--warn)}.pfill.err{background:var(--err)}
+.pfill.blue{background:var(--accent)}
+
+/* Allocation grid */
+.alloc-grid{display:grid;grid-template-columns:160px repeat(auto-fill,minmax(50px,1fr));gap:2px;font-size:11px}
+.alloc-cell{padding:5px;text-align:center;border-radius:4px;background:var(--sur2)}
+.alloc-header{font-weight:600;color:var(--txt2);font-size:10px}
+.alloc-name{font-weight:600;text-align:left;padding:5px 8px}
+.heat-0{background:var(--sur2);color:var(--txt3)}
+.heat-1{background:#dbeafe;color:#1e40af}
+.heat-2{background:#93c5fd;color:#1e40af}
+.heat-3{background:#3b82f6;color:#fff}
+.heat-4{background:#1d4ed8;color:#fff}
+.heat-5{background:#1e3a8a;color:#fff}
+html.dark .heat-0{background:var(--sur2)}
+html.dark .heat-1{background:#1e3a5f;color:#93c5fd}
+html.dark .heat-3{background:#1d4ed8;color:#fff}
+
+/* Print */
+@media print{nav,.tabs{display:none!important}.tab-pane{display:block!important}.page{padding:0}}
+</style>
+</head>
+<body>
+<nav>
+  <img src="bcm-logo.jpg" alt="BCM" style="height:36px;background:#fff;padding:3px 6px;border-radius:6px">
+  <a href="dash.html" class="nav-btn">← Obras</a>
+  <select class="proj-sel" id="proj-sel" onchange="loadReports(this.value)" style="margin-left:8px">
+    <option value="">— Selecione a obra —</option>
+  </select>
+  <span class="nav-sep"></span>
+  <span style="font-size:13px;opacity:.8" id="nav-user"></span>
+  <button class="nav-btn" onclick="window.print()">🖨 Imprimir</button>
+  <button class="dk-btn" id="dk-btn">🌙</button>
+  <button class="nav-btn" onclick="logout()">Sair</button>
+</nav>
+
+<div class="page">
+  <div class="tabs" id="tabs">
+    <button class="tab on" onclick="switchTab('curva-s')">📈 Curva S</button>
+    <button class="tab" onclick="switchTab('financeiro')">💰 Financeiro</button>
+    <button class="tab" onclick="switchTab('tarefas')">📋 Tarefas</button>
+    <button class="tab" onclick="switchTab('equipe')">👷 Equipe</button>
+  </div>
+
+  <!-- CURVA S -->
+  <div class="tab-pane on" id="pane-curva-s">
+    <div class="kpis" id="ks-kpis"></div>
+    <div class="card">
+      <h3>📈 Curva S — Progresso Físico Acumulado (%)</h3>
+      <canvas id="chart-curva-s" height="320"></canvas>
+    </div>
+    <div class="two-col">
+      <div class="card">
+        <h3>⏱️ Progresso por Sistema</h3>
+        <canvas id="chart-by-cat" height="260"></canvas>
+      </div>
+      <div class="card">
+        <h3>🚦 Status das Tarefas</h3>
+        <canvas id="chart-status" height="260"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- FINANCEIRO -->
+  <div class="tab-pane" id="pane-financeiro">
+    <div class="kpis" id="kf-kpis"></div>
+    <div class="two-col">
+      <div class="card">
+        <h3>💰 Previsto × Realizado por Categoria</h3>
+        <canvas id="chart-fin-cat" height="260"></canvas>
+      </div>
+      <div class="card">
+        <h3>📊 Índices EVM</h3>
+        <div id="evm-panel"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>📋 Marcos de Faturamento</h3>
+      <table>
+        <thead><tr><th>Marco</th><th>Vencimento</th><th>Valor</th><th>Status</th></tr></thead>
+        <tbody id="miles-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TAREFAS -->
+  <div class="tab-pane" id="pane-tarefas">
+    <div class="kpis" id="kt-kpis"></div>
+    <div class="card">
+      <h3>📋 Análise de Desvios — Tarefas</h3>
+      <table>
+        <thead><tr><th>Sistema</th><th>Tarefa</th><th>Início</th><th>Término</th><th>Progresso</th><th>Status</th><th>Desvio</th></tr></thead>
+        <tbody id="tasks-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- EQUIPE -->
+  <div class="tab-pane" id="pane-equipe">
+    <div class="kpis" id="ke-kpis"></div>
+    <div class="card">
+      <h3>👷 Alocação da Equipe por Semana</h3>
+      <div id="alloc-grid" style="overflow-x:auto"></div>
+    </div>
+    <div class="two-col">
+      <div class="card">
+        <h3>⏱️ Horas por Funcionário</h3>
+        <canvas id="chart-hours-emp" height="260"></canvas>
+      </div>
+      <div class="card">
+        <h3>📊 Horas Previstas por Sistema</h3>
+        <canvas id="chart-hours-cat" height="260"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const{createClient}=supabase;
+const sb=createClient('https://fkndewrridhgwwkrjmmc.supabase.co','sb_publishable_49gXUr0vbSdYLcHJXorglg_zVfhREcY');
+(function(){const DK='gantt-dark';function apply(on){document.documentElement.classList.toggle('dark',on);const b=document.getElementById('dk-btn');if(b)b.textContent=on?'☀️':'🌙';}apply(localStorage.getItem(DK)==='1');document.getElementById('dk-btn').onclick=function(){const on=!document.documentElement.classList.contains('dark');localStorage.setItem(DK,on?'1':'0');apply(on);};})();
+
+const ROLE=localStorage.getItem('bcm_role');
+let charts={};
+
+function switchTab(id){
+  document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('on',['curva-s','financeiro','tarefas','equipe'][i]===id));
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('on'));
+  document.getElementById('pane-'+id).classList.add('on');
+}
+
+async function init(){
+  const{data:{session}}=await sb.auth.getSession();
+  if(!session){window.location.href='index.html';return;}
+  document.getElementById('nav-user').textContent=(localStorage.getItem('bcm_name')||'')+' ('+ROLE+')';
+  const{data:projs}=await sb.from('projects').select('id,name').order('name');
+  const sel=document.getElementById('proj-sel');
+  (projs||[]).forEach(p=>sel.innerHTML+=`<option value="${p.id}">${esc(p.name)}</option>`);
+  const pid=new URLSearchParams(location.search).get('pid');
+  if(pid){sel.value=pid;loadReports(pid);}
+}
+async function logout(){await sb.auth.signOut();localStorage.clear();window.location.href='index.html';}
+function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function brl(n){return'R$ '+(+n||0).toLocaleString('pt-BR',{minimumFractionDigits:2});}
+function fmtD(d){if(!d)return'—';const[y,m,day]=d.split('-');return day+'/'+m+'/'+y;}
+function pd(s){return new Date(s+'T00:00:00');}
+function dif(a,b){return Math.round((b-a)/86400000);}
+function mkChart(id,cfg){if(charts[id])charts[id].destroy();charts[id]=new Chart(document.getElementById(id),cfg);return charts[id];}
+
+async function loadReports(pid){
+  pid=parseInt(pid);if(!pid)return;
+  const[{data:tasks},{data:budgets},{data:miles},{data:emps},{data:teData}]=await Promise.all([
+    sb.from('tasks').select('*').eq('project_id',pid).order('order_idx'),
+    sb.from('budget_items').select('*,cost_categories(name,type)').eq('project_id',pid),
+    sb.from('billing_milestones').select('*').eq('project_id',pid).order('due_date'),
+    sb.from('employees').select('*').eq('active',true),
+    sb.from('task_employees').select('*,employees(name),tasks!inner(project_id)').eq('tasks.project_id',pid)
+  ]);
+
+  const today=new Date();today.setHours(0,0,0,0);
+  const tList=tasks||[];
+  const bList=budgets||[];
+  const mList=miles||[];
+  const eList=emps||[];
+  const teList=teData||[];
+
+  // ── CURVA S ──────────────────────────────────────────────────
+  if(tList.length){
+    const dates=tList.flatMap(t=>[pd(t.start_date),pd(t.end_date)]);
+    const PS=new Date(Math.min(...dates));
+    const PE=new Date(Math.max(...dates));
+    const total=tList.length;
+    const done=tList.filter(t=>t.progress>=100).length;
+    const delayed=tList.filter(t=>pd(t.end_date)<today&&t.progress<100).length;
+    const inprog=tList.filter(t=>pd(t.start_date)<=today&&pd(t.end_date)>=today&&t.progress<100).length;
+    const avgProg=Math.round(tList.reduce((a,t)=>a+(+t.progress||0),0)/total);
+    const pctCrono=Math.min(100,Math.max(0,Math.round(dif(PS,today)/Math.max(dif(PS,PE),1)*100)));
+    const spi=pctCrono>0?(avgProg/pctCrono).toFixed(2):1;
+
+    document.getElementById('ks-kpis').innerHTML=`
+      <div class="kpi"><div class="val">${total}</div><div class="lbl">Total Tarefas</div></div>
+      <div class="kpi ok"><div class="val" style="color:var(--ok)">${done}</div><div class="lbl">Concluídas</div></div>
+      <div class="kpi"><div class="val" style="color:var(--warn)">${inprog}</div><div class="lbl">Em Andamento</div></div>
+      <div class="kpi ${delayed>0?'err':'ok'}"><div class="val" style="color:${delayed>0?'var(--err)':'var(--ok)'}">${delayed}</div><div class="lbl">Atrasadas</div></div>
+      <div class="kpi"><div class="val">${avgProg}%</div><div class="lbl">Progresso Geral</div></div>
+      <div class="kpi"><div class="val">${pctCrono}%</div><div class="lbl">% Cronograma</div></div>
+      <div class="kpi ${+spi>=1?'ok':'err'}"><div class="val" style="color:${+spi>=1?'var(--ok)':'var(--err)'}">${spi}</div><div class="lbl">SPI (índice prazo)</div><div class="sub">${+spi>=1?'✅ No prazo':'⚠️ Atrasado'}</div></div>
+    `;
+
+    // Build weekly Curva S data
+    const weeks=[];
+    const cur=new Date(PS);
+    while(cur<=PE){weeks.push(new Date(cur));cur.setDate(cur.getDate()+7);}
+
+    const planned=weeks.map(w=>{
+      const tasksStarted=tList.filter(t=>pd(t.start_date)<=w);
+      if(!tasksStarted.length)return 0;
+      const planPct=tasksStarted.reduce((a,t)=>{
+        const dur=Math.max(dif(pd(t.start_date),pd(t.end_date)),1);
+        const elapsed=Math.min(dif(pd(t.start_date),w),dur);
+        return a+(elapsed/dur*100/total);
+      },0);
+      return Math.min(100,Math.round(planPct));
+    });
+
+    const actual=weeks.map(w=>{
+      if(w>today)return null;
+      // actual = tasks completed or proportionally done up to week
+      const pct=tList.reduce((a,t)=>{
+        if(pd(t.start_date)>w)return a;
+        const p=+t.progress||0;
+        const endW=pd(t.end_date)<=w;
+        const val=endW?Math.max(p,0):p*(Math.min(dif(pd(t.start_date),w),Math.max(dif(pd(t.start_date),pd(t.end_date)),1))/Math.max(dif(pd(t.start_date),pd(t.end_date)),1));
+        return a+val/total;
+      },0);
+      return Math.min(100,Math.round(pct));
+    });
+
+    const labels=weeks.map(w=>{const d=w.toISOString().split('T')[0];const[y,m,day]=d.split('-');return day+'/'+m;});
+    mkChart('chart-curva-s',{type:'line',data:{labels,datasets:[
+      {label:'Previsto',data:planned,borderColor:'#0284c7',backgroundColor:'rgba(2,132,199,.1)',fill:true,tension:.4,pointRadius:3},
+      {label:'Realizado',data:actual,borderColor:'#16a34a',backgroundColor:'rgba(22,163,74,.1)',fill:true,tension:.4,pointRadius:3,spanGaps:true}
+    ]},options:{responsive:true,plugins:{legend:{position:'top'},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+ctx.parsed.y+'%'}}},scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%'},title:{display:true,text:'Progresso Acumulado (%)'}},x:{title:{display:true,text:'Semana'}}}}});
+
+    // By category
+    const cats=[...new Set(tList.map(t=>t.category))];
+    const catProg=cats.map(c=>{const ct=tList.filter(t=>t.category===c);return Math.round(ct.reduce((a,t)=>a+(+t.progress||0),0)/ct.length);});
+    const COLORS=['#3b82f6','#8b5cf6','#10b981','#f59e0b','#ef4444','#06b6d4','#ec4899','#84cc16','#f97316','#6366f1'];
+    mkChart('chart-by-cat',{type:'bar',data:{labels:cats,datasets:[{data:catProg,backgroundColor:cats.map((_,i)=>COLORS[i%COLORS.length]+'aa'),borderColor:cats.map((_,i)=>COLORS[i%COLORS.length]),borderWidth:1.5}]},options:{responsive:true,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{min:0,max:100,ticks:{callback:v=>v+'%'}}}}});
+
+    const statusCounts=[done,inprog,delayed,tList.filter(t=>t.progress===0&&pd(t.start_date)>today).length];
+    mkChart('chart-status',{type:'doughnut',data:{labels:['Concluídas','Em Andamento','Atrasadas','Não Iniciadas'],datasets:[{data:statusCounts,backgroundColor:['#16a34a','#d97706','#dc2626','#94a3b8'],borderWidth:2}]},options:{responsive:true,plugins:{legend:{position:'right'}}}});
+  }
+
+  // ── FINANCEIRO ───────────────────────────────────────────────
+  {
+    const totalP=bList.reduce((a,i)=>a+(+i.planned_total||0),0);
+    const totalA=bList.reduce((a,i)=>a+(+i.actual_total||0),0);
+    const totalBill=mList.reduce((a,m)=>a+(+m.amount||0),0);
+    const paidBill=mList.filter(m=>m.paid).reduce((a,m)=>a+(+m.amount||0),0);
+    const avgProg=tList.length?tList.reduce((a,t)=>a+(+t.progress||0),0)/tList.length:0;
+    const ev=totalP*(avgProg/100);
+    const cpi=totalA>0?(ev/totalA).toFixed(2):1;
+    const today2=new Date();today2.setHours(0,0,0,0);
+    const dates2=tList.flatMap(t=>[pd(t.start_date),pd(t.end_date)]);
+    const PS2=dates2.length?new Date(Math.min(...dates2)):today2;
+    const PE2=dates2.length?new Date(Math.max(...dates2)):today2;
+    const pv=totalP*(Math.min(100,Math.max(0,dif(PS2,today2)/Math.max(dif(PS2,PE2),1)))/100);
+    const spi2=pv>0?(ev/pv).toFixed(2):1;
+
+    document.getElementById('kf-kpis').innerHTML=`
+      <div class="kpi"><div class="val">${brl(totalP)}</div><div class="lbl">Orçamento Total</div></div>
+      <div class="kpi ${totalA>totalP?'err':'ok'}"><div class="val">${brl(totalA)}</div><div class="lbl">Realizado</div><div class="sub">${((totalA/Math.max(totalP,1))*100).toFixed(1)}% do orçado</div></div>
+      <div class="kpi"><div class="val">${brl(paidBill)}</div><div class="lbl">Faturado</div><div class="sub">de ${brl(totalBill)} contratado</div></div>
+      <div class="kpi ${+cpi>=1?'ok':'err'}"><div class="val" style="color:${+cpi>=1?'var(--ok)':'var(--err)'}">${cpi}</div><div class="lbl">CPI (índice custo)</div><div class="sub">${+cpi>=1?'✅ Abaixo do orçado':'⚠️ Acima do orçado'}</div></div>
+    `;
+
+    // EVM panel
+    document.getElementById('evm-panel').innerHTML=`
+      <div style="display:grid;gap:12px">
+        ${[
+          {label:'PV — Valor Planejado',val:brl(pv),desc:'Custo do trabalho que deveria estar concluído'},
+          {label:'EV — Valor Agregado',val:brl(ev),desc:'Custo orçado do trabalho realizado'},
+          {label:'AC — Custo Real',val:brl(totalA),desc:'Custo real incorrido'},
+          {label:'CV — Variação de Custo',val:brl(ev-totalA),desc:ev-totalA>=0?'Abaixo do orçado ✅':'Acima do orçado ⚠️',color:ev-totalA>=0?'var(--ok)':'var(--err)'},
+          {label:'SV — Variação de Prazo',val:brl(ev-pv),desc:ev-pv>=0?'Adiantado ✅':'Atrasado ⚠️',color:ev-pv>=0?'var(--ok)':'var(--err)'},
+          {label:'CPI — Índice de Custo',val:cpi,desc:+cpi>=1?'Eficiente — cada R$1 gera R$'+cpi+' de valor':'Ineficiente'},
+          {label:'SPI — Índice de Prazo',val:spi2,desc:+spi2>=1?'No prazo ou adiantado':'Atrasado em relação ao plano'},
+        ].map(e=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--brd)">
+          <div><div style="font-size:12px;font-weight:600">${e.label}</div><div style="font-size:11px;color:var(--txt3)">${e.desc}</div></div>
+          <div style="font-size:15px;font-weight:700;color:${e.color||'var(--accent)'}">${e.val}</div>
+        </div>`).join('')}
+      </div>
+    `;
+
+    // Chart financeiro
+    const byType={};
+    bList.forEach(i=>{const t=i.cost_categories?.type||'other';if(!byType[t])byType[t]={p:0,a:0};byType[t].p+=(+i.planned_total||0);byType[t].a+=(+i.actual_total||0);});
+    const typeNames={labor:'MO',material:'Material',equipment:'Equip.',subcontractor:'Subcontr.',other:'Outros'};
+    mkChart('chart-fin-cat',{type:'bar',data:{labels:Object.keys(byType).map(t=>typeNames[t]||t),datasets:[{label:'Previsto',data:Object.values(byType).map(v=>v.p),backgroundColor:'rgba(2,132,199,.7)',borderRadius:4},{label:'Realizado',data:Object.values(byType).map(v=>v.a),backgroundColor:'rgba(220,38,38,.6)',borderRadius:4}]},options:{responsive:true,plugins:{legend:{position:'top'}},scales:{y:{ticks:{callback:v=>'R$'+v.toLocaleString('pt-BR')}}}}});
+
+    // Milestones
+    document.getElementById('miles-tbody').innerHTML=mList.map(m=>`
+      <tr>
+        <td style="font-weight:600">${esc(m.name)}</td>
+        <td>${fmtD(m.due_date)}</td>
+        <td style="font-weight:700;color:var(--ok)">${brl(m.amount)}</td>
+        <td>${m.paid?'<span class="badge done">✅ Recebido</span>':'<span class="badge at-risk">⏳ Pendente</span>'}</td>
+      </tr>`).join('')||'<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--txt3)">Nenhum marco cadastrado.</td></tr>';
+  }
+
+  // ── TAREFAS ──────────────────────────────────────────────────
+  {
+    const today3=new Date();today3.setHours(0,0,0,0);
+    const done3=tList.filter(t=>t.progress>=100).length;
+    const del3=tList.filter(t=>pd(t.end_date)<today3&&t.progress<100).length;
+    document.getElementById('kt-kpis').innerHTML=`
+      <div class="kpi"><div class="val">${tList.length}</div><div class="lbl">Total</div></div>
+      <div class="kpi ok"><div class="val" style="color:var(--ok)">${done3}</div><div class="lbl">Concluídas</div></div>
+      <div class="kpi ${del3>0?'err':'ok'}"><div class="val" style="color:${del3>0?'var(--err)':'var(--ok)'}">${del3}</div><div class="lbl">Atrasadas</div></div>
+      <div class="kpi"><div class="val">${tList.filter(t=>pd(t.start_date)<=today3&&pd(t.end_date)>=today3&&t.progress<100).length}</div><div class="lbl">Em Andamento</div></div>
+    `;
+
+    document.getElementById('tasks-tbody').innerHTML=tList.map(t=>{
+      const s=pd(t.start_date),e=pd(t.end_date);
+      let status='on-track',statusLabel='No Prazo';
+      if(t.progress>=100){status='done';statusLabel='Concluída';}
+      else if(e<today3){status='delayed';statusLabel='Atrasada';}
+      else if(e-today3<7*86400000&&t.progress<50){status='at-risk';statusLabel='Em Risco';}
+      const deviation=dif(e,today3);
+      return`<tr>
+        <td style="font-size:11px;color:var(--txt3)">${esc(t.category)}</td>
+        <td style="font-weight:600;max-width:200px">${esc(t.name)}</td>
+        <td>${fmtD(t.start_date)}</td>
+        <td>${fmtD(t.end_date)}</td>
+        <td>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-weight:700;min-width:32px">${t.progress}%</span>
+            <div class="pbar" style="flex:1"><div class="pfill blue" style="width:${t.progress}%"></div></div>
+          </div>
+        </td>
+        <td><span class="badge ${status}">${statusLabel}</span></td>
+        <td style="color:${deviation<0&&t.progress<100?'var(--err)':'var(--txt3)'}">
+          ${t.progress<100&&e<today3?Math.abs(deviation)+' dias atrasado':'—'}
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  // ── EQUIPE ───────────────────────────────────────────────────
+  {
+    const projEmps=eList.filter(e=>teList.some(te=>te.employees?.name===e.name||te.employee_id===e.id));
+    const totalPH=teList.reduce((a,te)=>a+(+te.planned_hours||0),0);
+
+    document.getElementById('ke-kpis').innerHTML=`
+      <div class="kpi"><div class="val">${projEmps.length||eList.length}</div><div class="lbl">Funcionários Alocados</div></div>
+      <div class="kpi"><div class="val">${totalPH.toFixed(0)}h</div><div class="lbl">Total Horas Planejadas</div></div>
+      <div class="kpi"><div class="val">${teList.reduce((a,te)=>a+(+te.actual_hours||0),0).toFixed(0)}h</div><div class="lbl">Horas Realizadas</div></div>
+    `;
+
+    // Hours by employee chart
+    const empHours={};
+    teList.forEach(te=>{const n=te.employees?.name||te.employee_id;if(!empHours[n])empHours[n]={planned:0,actual:0};empHours[n].planned+=(+te.planned_hours||0);empHours[n].actual+=(+te.actual_hours||0);});
+    if(Object.keys(empHours).length){
+      mkChart('chart-hours-emp',{type:'bar',data:{labels:Object.keys(empHours),datasets:[{label:'Previsto',data:Object.values(empHours).map(v=>v.planned),backgroundColor:'rgba(2,132,199,.7)',borderRadius:4},{label:'Realizado',data:Object.values(empHours).map(v=>v.actual),backgroundColor:'rgba(22,163,74,.6)',borderRadius:4}]},options:{responsive:true,plugins:{legend:{position:'top'}},scales:{y:{title:{display:true,text:'Horas'}}}}});
+    }
+
+    // Hours by category
+    const catHours={};
+    teList.forEach(te=>{
+      const task=tList.find(t=>t.id===te.task_id);
+      if(!task)return;
+      const c=task.category;
+      if(!catHours[c])catHours[c]=0;
+      catHours[c]+=(+te.planned_hours||0);
+    });
+    const COLORS2=['#3b82f6','#8b5cf6','#10b981','#f59e0b','#ef4444','#06b6d4','#ec4899','#84cc16','#f97316','#6366f1'];
+    if(Object.keys(catHours).length){
+      mkChart('chart-hours-cat',{type:'doughnut',data:{labels:Object.keys(catHours),datasets:[{data:Object.values(catHours),backgroundColor:Object.keys(catHours).map((_,i)=>COLORS2[i%COLORS2.length]),borderWidth:2}]},options:{responsive:true,plugins:{legend:{position:'right'}}}});
+    }
+
+    // Allocation heatmap — by week
+    if(teList.length&&tList.length){
+      const dates=tList.flatMap(t=>[pd(t.start_date),pd(t.end_date)]);
+      const PS=new Date(Math.min(...dates));
+      const PE=new Date(Math.max(...dates));
+      const weeks=[];const c=new Date(PS);
+      while(c<=PE&&weeks.length<16){weeks.push(new Date(c));c.setDate(c.getDate()+7);}
+      const empList=[...new Set(teList.map(te=>te.employees?.name||te.employee_id))];
+
+      let html='<div class="alloc-grid" style="min-width:'+(160+weeks.length*52)+'px">';
+      html+='<div class="alloc-cell alloc-header">Funcionário</div>';
+      weeks.forEach(w=>{const d=w.toISOString().split('T')[0];const[y,m,day]=d.split('-');html+=`<div class="alloc-cell alloc-header">${day}/${m}</div>`;});
+
+      empList.forEach(emp=>{
+        html+=`<div class="alloc-cell alloc-name">${esc(emp)}</div>`;
+        weeks.forEach(w=>{
+          const wEnd=new Date(w);wEnd.setDate(wEnd.getDate()+6);
+          const weekH=teList.filter(te=>(te.employees?.name===emp||te.employee_id===emp)&&tList.some(t=>t.id===te.task_id&&pd(t.start_date)<=wEnd&&pd(t.end_date)>=w)).reduce((a,te)=>a+((+te.allocation_pct||100)/100*9),0);
+          const heat=weekH<1?0:weekH<9?1:weekH<27?2:weekH<45?3:weekH<63?4:5;
+          html+=`<div class="alloc-cell heat-${heat}" title="${weekH.toFixed(0)}h">${weekH>0?weekH.toFixed(0)+'h':''}</div>`;
+        });
+      });
+      html+='</div>';
+      document.getElementById('alloc-grid').innerHTML=html;
+    } else {
+      document.getElementById('alloc-grid').innerHTML='<div style="text-align:center;padding:32px;color:var(--txt3)">Nenhuma alocação cadastrada para esta obra.<br>Atribua funcionários às tarefas na tela de Alocação.</div>';
+    }
+  }
+}
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BCM — Orçamento</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--primary:#0d1f3c;--accent:#0284c7;--bg:#edf1f7;--sur:#fff;--sur2:#f4f7fb;--brd:#dde3ed;--txt:#1e293b;--txt2:#475569;--txt3:#94a3b8;--ok:#16a34a;--warn:#d97706;--err:#dc2626}
+html.dark{--bg:#0e1626;--sur:#131f33;--sur2:#182540;--brd:#243050;--txt:#dde4f0;--txt2:#8fa3c0;--txt3:#4d6080}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--txt)}
+nav{background:var(--primary);color:#fff;height:58px;display:flex;align-items:center;padding:0 24px;gap:12px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.nav-sep{flex:1}.nav-btn{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);color:#fff;padding:5px 12px;border-radius:6px;font-size:13px;cursor:pointer;text-decoration:none}
+.dk-btn{background:none;border:1px solid rgba(255,255,255,.3);color:#fff;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:15px}
+.page{max-width:1200px;margin:0 auto;padding:28px 20px}
+.page-hdr{display:flex;align-items:center;margin-bottom:20px;gap:12px;flex-wrap:wrap}
+.page-hdr h1{font-size:22px}
+.btn-new{background:var(--accent);color:#fff;border:none;padding:8px 18px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer}
+select.proj-sel{padding:7px 12px;border:1.5px solid var(--brd);border-radius:8px;font-size:14px;background:var(--sur);color:var(--txt);outline:none}
+/* KPIs */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px}
+.kpi{background:var(--sur);border-radius:12px;padding:18px 20px;border:1px solid var(--brd);border-left:4px solid var(--accent)}
+.kpi.warn{border-left-color:var(--warn)}.kpi.err{border-left-color:var(--err)}.kpi.ok{border-left-color:var(--ok)}
+.kpi .val{font-size:22px;font-weight:700;color:var(--txt)}
+.kpi .lbl{font-size:11px;text-transform:uppercase;color:var(--txt3);letter-spacing:.04em;margin-top:2px}
+.kpi .sub{font-size:12px;color:var(--txt2);margin-top:4px}
+/* Charts row */
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px}
+.chart-card{background:var(--sur);border-radius:12px;padding:20px;border:1px solid var(--brd)}
+.chart-card h3{font-size:14px;font-weight:600;color:var(--txt2);margin-bottom:16px}
+/* Table */
+.section{background:var(--sur);border-radius:12px;border:1px solid var(--brd);overflow:hidden;margin-bottom:20px}
+.section-hdr{background:var(--primary);color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:600}
+table{width:100%;border-collapse:collapse}
+thead th{background:var(--sur2);font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:10px 14px;text-align:left;color:var(--txt2);border-bottom:1px solid var(--brd)}
+tbody tr{border-bottom:1px solid var(--brd)}
+tbody tr:last-child{border:none}
+tbody tr:hover{background:var(--sur2)}
+td{padding:10px 14px;font-size:13px}
+.cat-badge{font-size:10px;padding:2px 7px;border-radius:8px;font-weight:600}
+.labor{background:#dbeafe;color:#1e40af}
+.material{background:#dcfce7;color:#166534}
+.equipment{background:#fef9c3;color:#854d0e}
+.subcontractor{background:#f3e8ff;color:#6b21a8}
+.other{background:#f1f5f9;color:#475569}
+html.dark .labor{background:#1e3a5f;color:#93c5fd}
+html.dark .material{background:#14532d;color:#86efac}
+html.dark .equipment{background:#451a03;color:#fcd34d}
+html.dark .subcontractor{background:#3b0764;color:#d8b4fe}
+html.dark .other{background:#1e293b;color:#94a3b8}
+.over{color:var(--err);font-weight:700}
+.under{color:var(--ok)}
+.icon-btn{background:none;border:none;cursor:pointer;padding:3px 6px;border-radius:5px;color:var(--txt3);font-size:13px}
+.icon-btn:hover{color:var(--accent)}
+/* Progress bar */
+.pbar{height:6px;background:var(--brd);border-radius:3px;overflow:hidden;margin-top:4px;min-width:80px}
+.pfill{height:100%;border-radius:3px;transition:width .3s}
+.pfill.ok{background:var(--ok)}.pfill.warn{background:var(--warn)}.pfill.err{background:var(--err)}
+/* Modal */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center}
+.overlay.open{display:flex}
+.modal{background:var(--sur);border-radius:16px;padding:28px;width:100%;max-width:500px;box-shadow:0 8px 40px rgba(0,0,0,.2)}
+.modal h3{font-size:16px;margin-bottom:16px}
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:12px;color:var(--txt2);margin-bottom:4px}
+.field input,.field select{width:100%;padding:8px 10px;border:1.5px solid var(--brd);border-radius:7px;font-size:13px;color:var(--txt);background:var(--sur);outline:none}
+.field input:focus,.field select:focus{border-color:var(--accent)}
+.modal-btns{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}
+.btn-cancel{background:var(--sur2);border:1px solid var(--brd);color:var(--txt2);padding:7px 14px;border-radius:7px;cursor:pointer;font-size:13px}
+.btn-save{background:var(--accent);color:#fff;border:none;padding:7px 16px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600}
+.btn-del{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;padding:7px 12px;border-radius:7px;cursor:pointer;font-size:13px;margin-right:auto}
+</style>
+</head>
+<body>
+<nav>
+  <img src="bcm-logo.jpg" alt="BCM" style="height:36px;background:#fff;padding:3px 6px;border-radius:6px">
+  <a href="dash.html" class="nav-btn">← Obras</a>
+  <span class="nav-sep"></span>
+  <select class="proj-sel" id="proj-sel" onchange="loadBudget(this.value)"><option value="">— Selecione a obra —</option></select>
+  <span style="font-size:13px;opacity:.8;margin-left:8px" id="nav-user"></span>
+  <button class="dk-btn" id="dk-btn">🌙</button>
+  <button class="nav-btn" onclick="logout()">Sair</button>
+</nav>
+
+<div class="page">
+  <div class="page-hdr">
+    <h1>💰 Orçamento da Obra</h1>
+    <span style="flex:1"></span>
+    <button class="btn-new" id="btn-add" style="display:none" onclick="openNew()">＋ Adicionar Item</button>
+  </div>
+  <div class="kpis" id="kpis"></div>
+  <div class="charts" id="charts-row" style="display:none">
+    <div class="chart-card"><h3>Previsto × Realizado por Categoria</h3><canvas id="chart-cat" height="220"></canvas></div>
+    <div class="chart-card"><h3>Composição do Orçamento</h3><canvas id="chart-pie" height="220"></canvas></div>
+  </div>
+  <div class="section" id="items-section" style="display:none">
+    <div class="section-hdr">
+      <span>Itens do Orçamento</span>
+      <span id="items-count" style="font-size:11px;opacity:.7"></span>
+    </div>
+    <table>
+      <thead><tr><th>Tarefa</th><th>Descrição</th><th>Categoria</th><th>Un</th><th>Qtd</th><th>Custo Unit.</th><th>Previsto</th><th>Realizado</th><th>Desvio</th><th></th></tr></thead>
+      <tbody id="items-tbody"></tbody>
+    </table>
+  </div>
+  <!-- Billing milestones -->
+  <div class="section" id="billing-section" style="display:none">
+    <div class="section-hdr">
+      <span>📋 Marcos de Faturamento</span>
+      <button onclick="openNewMilestone()" style="background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.3);color:#fff;padding:4px 10px;border-radius:5px;cursor:pointer;font-size:12px">＋ Marco</button>
+    </div>
+    <table>
+      <thead><tr><th>Marco</th><th>Vencimento</th><th>Valor</th><th>Status</th><th></th></tr></thead>
+      <tbody id="billing-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Budget item modal -->
+<div class="overlay" id="ov-item">
+  <div class="modal">
+    <h3 id="im-title">Novo Item de Orçamento</h3>
+    <div class="field"><label>Descrição *</label><input id="i-desc" placeholder="Ex: Cabo 10mm² — 50m"></div>
+    <div class="field"><label>Tarefa (opcional)</label><select id="i-task"><option value="">— Sem tarefa vinculada —</option></select></div>
+    <div class="field"><label>Categoria</label><select id="i-cat"></select></div>
+    <div class="frow">
+      <div class="field"><label>Unidade</label>
+        <input id="i-unit" list="units-list" placeholder="un">
+        <datalist id="units-list"><option>un</option><option>h</option><option>m</option><option>m²</option><option>kg</option><option>vb</option><option>pç</option></datalist>
+      </div>
+      <div class="field"><label>Quantidade</label><input id="i-qty" type="number" min="0" step="0.001" placeholder="1"></div>
+    </div>
+    <div class="frow">
+      <div class="field"><label>Custo Unitário (R$)</label><input id="i-unitcost" type="number" min="0" step="0.01" placeholder="0,00" oninput="calcTotal()"></div>
+      <div class="field"><label>Total Previsto (R$)</label><input id="i-planned" type="number" min="0" step="0.01" placeholder="0,00" readonly style="background:var(--sur2)"></div>
+    </div>
+    <div class="field"><label>Realizado (R$)</label><input id="i-actual" type="number" min="0" step="0.01" placeholder="0,00"></div>
+    <div class="modal-btns">
+      <button class="btn-del" id="i-del" style="display:none" onclick="deleteItem()">Excluir</button>
+      <button class="btn-cancel" onclick="closeItem()">Cancelar</button>
+      <button class="btn-save" onclick="saveItem()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Milestone modal -->
+<div class="overlay" id="ov-mile">
+  <div class="modal">
+    <h3 id="mm-title">Novo Marco de Faturamento</h3>
+    <div class="field"><label>Descrição *</label><input id="m-name" placeholder="Ex: Medição 1 — Painéis"></div>
+    <div class="frow">
+      <div class="field"><label>Vencimento</label><input id="m-date" type="date"></div>
+      <div class="field"><label>Valor (R$)</label><input id="m-amount" type="number" min="0" step="0.01" placeholder="0,00"></div>
+    </div>
+    <div class="field"><label>Observação</label><input id="m-desc" placeholder="Opcional"></div>
+    <div class="modal-btns">
+      <button class="btn-del" id="m-del" style="display:none" onclick="deleteMilestone()">Excluir</button>
+      <button class="btn-cancel" onclick="closeMilestone()">Cancelar</button>
+      <button class="btn-save" onclick="saveMilestone()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const{createClient}=supabase;
+const sb=createClient('https://fkndewrridhgwwkrjmmc.supabase.co','sb_publishable_49gXUr0vbSdYLcHJXorglg_zVfhREcY');
+(function(){const DK='gantt-dark';function apply(on){document.documentElement.classList.toggle('dark',on);const b=document.getElementById('dk-btn');if(b)b.textContent=on?'☀️':'🌙';}apply(localStorage.getItem(DK)==='1');document.getElementById('dk-btn').onclick=function(){const on=!document.documentElement.classList.contains('dark');localStorage.setItem(DK,on?'1':'0');apply(on);};})();
+
+const ROLE=localStorage.getItem('bcm_role');
+let curPid=null, editItemId=null, editMileId=null, cats=[], tasks=[], chartCat=null, chartPie=null;
+
+async function init(){
+  const{data:{session}}=await sb.auth.getSession();
+  if(!session){window.location.href='index.html';return;}
+  document.getElementById('nav-user').textContent=(localStorage.getItem('bcm_name')||'')+' ('+ROLE+')';
+  const{data:projs}=await sb.from('projects').select('id,name').order('name');
+  const sel=document.getElementById('proj-sel');
+  (projs||[]).forEach(p=>sel.innerHTML+=`<option value="${p.id}">${esc(p.name)}</option>`);
+  const{data:catData}=await sb.from('cost_categories').select('*').order('id');
+  cats=catData||[];
+  // Check URL param
+  const pid=new URLSearchParams(location.search).get('pid');
+  if(pid){sel.value=pid;loadBudget(pid);}
+}
+async function logout(){await sb.auth.signOut();localStorage.clear();window.location.href='index.html';}
+function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function brl(n){return'R$ '+(+n||0).toLocaleString('pt-BR',{minimumFractionDigits:2});}
+function fmtD(d){if(!d)return'—';const[y,m,day]=d.split('-');return day+'/'+m+'/'+y;}
+
+const CAT_TYPE_CLASS={labor:'labor',material:'material',equipment:'equipment',subcontractor:'subcontractor',other:'other'};
+const CAT_TYPE_NAME={labor:'Mão de Obra',material:'Material',equipment:'Equipamento',subcontractor:'Subcontratado',other:'Outros'};
+
+async function loadBudget(pid){
+  curPid=parseInt(pid)||null;
+  if(!curPid){document.getElementById('kpis').innerHTML='';document.getElementById('btn-add').style.display='none';return;}
+  document.getElementById('btn-add').style.display=ROLE!=='cliente'?'':'none';
+  const[{data:items},{data:miles},{data:taskData}]=await Promise.all([
+    sb.from('budget_items').select('*,cost_categories(name,type),tasks(name)').eq('project_id',pid).order('id'),
+    sb.from('billing_milestones').select('*').eq('project_id',pid).order('due_date'),
+    sb.from('tasks').select('id,name,category').eq('project_id',pid).order('order_idx')
+  ]);
+  tasks=taskData||[];
+  const list=items||[];
+  const totalPlanned=list.reduce((a,i)=>a+(+i.planned_total||0),0);
+  const totalActual=list.reduce((a,i)=>a+(+i.actual_total||0),0);
+  const deviation=totalActual-totalPlanned;
+  const devPct=totalPlanned?((deviation/totalPlanned)*100).toFixed(1):0;
+  const totalBilling=(miles||[]).reduce((a,m)=>a+(+m.amount||0),0);
+  const paidBilling=(miles||[]).filter(m=>m.paid).reduce((a,m)=>a+(+m.amount||0),0);
+
+  // KPIs
+  document.getElementById('kpis').innerHTML=`
+    <div class="kpi"><div class="val">${brl(totalPlanned)}</div><div class="lbl">Orçamento Previsto</div><div class="sub">${list.length} itens</div></div>
+    <div class="kpi ${deviation>0?'err':deviation<-totalPlanned*0.05?'ok':'warn'}">
+      <div class="val">${brl(totalActual)}</div><div class="lbl">Realizado</div>
+      <div class="sub" style="color:${deviation>0?'var(--err)':'var(--ok)'}">${deviation>=0?'+':''}${brl(deviation)} (${devPct}%)</div>
+    </div>
+    <div class="kpi ${deviation>totalPlanned*0.1?'err':deviation>0?'warn':'ok'}">
+      <div class="val" style="color:${Math.abs(deviation)>totalPlanned*0.1?'var(--err)':'var(--ok)'}">${devPct}%</div>
+      <div class="lbl">Desvio Orçamentário</div>
+      <div class="sub">${deviation>0?'⚠️ Acima do previsto':'✅ Dentro do orçamento'}</div>
+    </div>
+    <div class="kpi"><div class="val">${brl(paidBilling)}</div><div class="lbl">Faturado / Recebido</div><div class="sub">de ${brl(totalBilling)} contratado</div></div>
+  `;
+
+  // Charts
+  document.getElementById('charts-row').style.display=list.length?'grid':'none';
+  document.getElementById('items-section').style.display='';
+  document.getElementById('billing-section').style.display='';
+
+  if(list.length){
+    // Group by category type
+    const byType={};
+    list.forEach(i=>{const t=i.cost_categories?.type||'other';if(!byType[t])byType[t]={planned:0,actual:0};byType[t].planned+=(+i.planned_total||0);byType[t].actual+=(+i.actual_total||0);});
+    const labels=Object.keys(byType).map(t=>CAT_TYPE_NAME[t]||t);
+    const planned=Object.values(byType).map(v=>v.planned);
+    const actual=Object.values(byType).map(v=>v.actual);
+    const colors=['#3b82f6','#10b981','#f59e0b','#8b5cf6','#94a3b8'];
+
+    if(chartCat)chartCat.destroy();
+    chartCat=new Chart(document.getElementById('chart-cat'),{type:'bar',data:{labels,datasets:[{label:'Previsto',data:planned,backgroundColor:'rgba(2,132,199,.6)',borderColor:'#0284c7',borderWidth:1.5},{label:'Realizado',data:actual,backgroundColor:'rgba(220,38,38,.5)',borderColor:'#dc2626',borderWidth:1.5}]},options:{responsive:true,plugins:{legend:{position:'top'}},scales:{y:{ticks:{callback:v=>'R$ '+v.toLocaleString('pt-BR')}}}}});
+
+    if(chartPie)chartPie.destroy();
+    chartPie=new Chart(document.getElementById('chart-pie'),{type:'doughnut',data:{labels,datasets:[{data:planned,backgroundColor:colors,borderWidth:2}]},options:{responsive:true,plugins:{legend:{position:'right'}}}});
+  }
+
+  // Items table
+  document.getElementById('items-count').textContent=list.length+' itens';
+  document.getElementById('items-tbody').innerHTML=list.map(i=>{
+    const dev=(+i.actual_total||0)-(+i.planned_total||0);
+    const devPctItem=i.planned_total?((dev/i.planned_total)*100).toFixed(0):0;
+    const pct=Math.min(100,i.planned_total?(+i.actual_total/+i.planned_total*100):0);
+    const cls=pct>100?'err':pct>80?'warn':'ok';
+    return`<tr>
+      <td style="font-size:12px;color:var(--txt3)">${esc(i.tasks?.name||'—')}</td>
+      <td style="font-weight:600">${esc(i.description)}</td>
+      <td><span class="cat-badge ${CAT_TYPE_CLASS[i.cost_categories?.type||'other']}">${esc(i.cost_categories?.name||'—')}</span></td>
+      <td style="color:var(--txt3)">${esc(i.unit||'un')}</td>
+      <td style="text-align:right">${(+i.planned_qty||1).toLocaleString('pt-BR',{maximumFractionDigits:2})}</td>
+      <td style="text-align:right">${brl(i.planned_unit_cost)}</td>
+      <td style="font-weight:600;text-align:right">${brl(i.planned_total)}</td>
+      <td style="text-align:right">
+        ${brl(i.actual_total)}
+        <div class="pbar"><div class="pfill ${cls}" style="width:${Math.min(100,pct)}%"></div></div>
+      </td>
+      <td class="${dev>0?'over':dev<0?'under':''}" style="text-align:right">${dev>=0?'+':''}${brl(dev)}<br><small>${devPctItem}%</small></td>
+      <td>
+        ${ROLE!=='cliente'?`<button class="icon-btn" onclick="editItem(${i.id})">✏️</button>`:''}
+      </td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--txt3)">Nenhum item cadastrado.</td></tr>';
+
+  // Summary row
+  document.getElementById('items-tbody').innerHTML+=`
+    <tr style="background:var(--sur2);font-weight:700">
+      <td colspan="6" style="padding:10px 14px;color:var(--txt2)">TOTAL</td>
+      <td style="padding:10px 14px;text-align:right;color:var(--accent)">${brl(totalPlanned)}</td>
+      <td style="padding:10px 14px;text-align:right">${brl(totalActual)}</td>
+      <td style="padding:10px 14px;text-align:right" class="${deviation>0?'over':'under'}">${deviation>=0?'+':''}${brl(deviation)}</td>
+      <td></td>
+    </tr>`;
+
+  // Milestones
+  document.getElementById('billing-tbody').innerHTML=(miles||[]).map(m=>`
+    <tr>
+      <td style="font-weight:600">${esc(m.name)}</td>
+      <td>${fmtD(m.due_date)}</td>
+      <td style="font-weight:700;color:var(--ok)">${brl(m.amount)}</td>
+      <td>
+        ${m.paid?`<span style="color:var(--ok);font-weight:600">✅ Recebido ${fmtD(m.paid_date)}</span>`:`<span style="color:var(--warn)">⏳ Pendente</span>`}
+      </td>
+      <td>
+        ${ROLE!=='cliente'?`<button class="icon-btn" onclick="editMilestone(${m.id})">✏️</button>
+        <button class="icon-btn" onclick="togglePaid(${m.id},${m.paid})">${m.paid?'↩️':'💰'}</button>`:''}
+      </td>
+    </tr>`).join('')||'<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--txt3)">Nenhum marco cadastrado.</td></tr>';
+}
+
+// Item modal
+function openNew(){
+  editItemId=null;
+  document.getElementById('im-title').textContent='Novo Item';
+  document.getElementById('i-del').style.display='none';
+  ['i-desc','i-unit','i-qty','i-unitcost','i-planned','i-actual'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('i-unit').value='un';
+  document.getElementById('i-qty').value='1';
+  // Populate selects
+  const tSel=document.getElementById('i-task');
+  tSel.innerHTML='<option value="">— Sem tarefa —</option>'+tasks.map(t=>`<option value="${t.id}">[${esc(t.category)}] ${esc(t.name)}</option>`).join('');
+  document.getElementById('i-cat').innerHTML=cats.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  document.getElementById('ov-item').classList.add('open');
+}
+async function editItem(id){
+  const{data:item}=await sb.from('budget_items').select('*').eq('id',id).single();
+  if(!item)return;
+  editItemId=id;
+  document.getElementById('im-title').textContent='Editar Item';
+  document.getElementById('i-del').style.display='';
+  document.getElementById('i-desc').value=item.description||'';
+  document.getElementById('i-unit').value=item.unit||'un';
+  document.getElementById('i-qty').value=item.planned_qty||1;
+  document.getElementById('i-unitcost').value=item.planned_unit_cost||0;
+  document.getElementById('i-planned').value=item.planned_total||0;
+  document.getElementById('i-actual').value=item.actual_total||0;
+  const tSel=document.getElementById('i-task');
+  tSel.innerHTML='<option value="">— Sem tarefa —</option>'+tasks.map(t=>`<option value="${t.id}"${t.id===item.task_id?' selected':''}>[${esc(t.category)}] ${esc(t.name)}</option>`).join('');
+  document.getElementById('i-cat').innerHTML=cats.map(c=>`<option value="${c.id}"${c.id===item.category_id?' selected':''}>${esc(c.name)}</option>`).join('');
+  document.getElementById('ov-item').classList.add('open');
+}
+function calcTotal(){
+  const qty=parseFloat(document.getElementById('i-qty').value)||1;
+  const uc=parseFloat(document.getElementById('i-unitcost').value)||0;
+  document.getElementById('i-planned').value=(qty*uc).toFixed(2);
+}
+function closeItem(){document.getElementById('ov-item').classList.remove('open');}
+async function saveItem(){
+  const desc=document.getElementById('i-desc').value.trim();
+  if(!desc){alert('Informe a descrição');return;}
+  const qty=parseFloat(document.getElementById('i-qty').value)||1;
+  const uc=parseFloat(document.getElementById('i-unitcost').value)||0;
+  const body={
+    project_id:curPid,
+    task_id:parseInt(document.getElementById('i-task').value)||null,
+    category_id:parseInt(document.getElementById('i-cat').value)||null,
+    description:desc,
+    unit:document.getElementById('i-unit').value||'un',
+    planned_qty:qty,
+    planned_unit_cost:uc,
+    planned_total:qty*uc,
+    actual_total:parseFloat(document.getElementById('i-actual').value)||0,
+  };
+  const err=editItemId?(await sb.from('budget_items').update(body).eq('id',editItemId)).error:(await sb.from('budget_items').insert(body)).error;
+  if(err){alert(err.message);return;}
+  closeItem();loadBudget(curPid);
+}
+async function deleteItem(){if(!editItemId||!confirm('Excluir este item?'))return;await sb.from('budget_items').delete().eq('id',editItemId);closeItem();loadBudget(curPid);}
+
+// Milestone
+function openNewMilestone(){editMileId=null;document.getElementById('mm-title').textContent='Novo Marco';document.getElementById('m-del').style.display='none';['m-name','m-date','m-amount','m-desc'].forEach(id=>document.getElementById(id).value='');document.getElementById('ov-mile').classList.add('open');}
+async function editMilestone(id){
+  const{data:m}=await sb.from('billing_milestones').select('*').eq('id',id).single();
+  if(!m)return;editMileId=id;document.getElementById('mm-title').textContent='Editar Marco';document.getElementById('m-del').style.display='';
+  document.getElementById('m-name').value=m.name||'';document.getElementById('m-date').value=m.due_date||'';document.getElementById('m-amount').value=m.amount||0;document.getElementById('m-desc').value=m.description||'';
+  document.getElementById('ov-mile').classList.add('open');
+}
+function closeMilestone(){document.getElementById('ov-mile').classList.remove('open');}
+async function saveMilestone(){
+  const name=document.getElementById('m-name').value.trim();if(!name){alert('Informe a descrição');return;}
+  const body={project_id:curPid,name,due_date:document.getElementById('m-date').value||null,amount:parseFloat(document.getElementById('m-amount').value)||0,description:document.getElementById('m-desc').value||null};
+  const err=editMileId?(await sb.from('billing_milestones').update(body).eq('id',editMileId)).error:(await sb.from('billing_milestones').insert(body)).error;
+  if(err){alert(err.message);return;}closeMilestone();loadBudget(curPid);
+}
+async function deleteMilestone(){if(!editMileId||!confirm('Excluir?'))return;await sb.from('billing_milestones').delete().eq('id',editMileId);closeMilestone();loadBudget(curPid);}
+async function togglePaid(id,cur){
+  const upd=cur?{paid:false,paid_date:null}:{paid:true,paid_date:new Date().toISOString().split('T')[0]};
+  await sb.from('billing_milestones').update(upd).eq('id',id);loadBudget(curPid);
+}
+
+['ov-item','ov-mile'].forEach(id=>{document.getElementById(id).onclick=e=>{if(e.target.id===id)document.getElementById(id).classList.remove('open');};});
+init();
+</script>
+</body>
+</html>
