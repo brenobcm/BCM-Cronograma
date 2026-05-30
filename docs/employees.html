@@ -306,8 +306,8 @@ function importExcel(input) {
 
       importRows = dataRows.map((row, i) => {
         const name = idx.name >= 0 ? String(row[idx.name] || '').trim() : '';
-        if (!name) return null; // pula linhas sem nome
-        // Ignora linha de exemplo (verde)
+        if (!name) return null;
+        // Ignora linha de exemplo
         if (name.toLowerCase().includes('joão da silva') || name.toLowerCase().includes('exemplo')) return null;
         const activeVal = idx.active >= 0 ? String(row[idx.active] || 'SIM').trim().toUpperCase() : 'SIM';
         return {
@@ -326,6 +326,13 @@ function importExcel(input) {
       // Preview
       document.getElementById('import-thead').innerHTML = `
         <tr style="background:var(--primary)">${['#','Nome','E-mail','Cargo','Custo/h','H/dia','Ativo'].map(h=>`<th style="padding:8px 10px;color:#fff;font-size:11px;text-align:left">${h}</th>`).join('')}</tr>`;
+      // Valida campos obrigatórios
+      const invalid = importRows.filter(r => !r.role || r.hourly_rate === undefined || r.daily_hours === undefined);
+      if (invalid.length) {
+        const names = invalid.slice(0,3).map(r=>r.name).join(', ');
+        if (!confirm(`⚠️ ${invalid.length} linha(s) com campos obrigatórios incompletos (Cargo, Custo/h, Horas):\n${names}\n\nDeseja continuar mesmo assim?`)) return;
+      }
+
       document.getElementById('import-tbody').innerHTML = importRows.map((r, i) => `
         <tr style="border-bottom:1px solid var(--brd);background:${i%2===0?'var(--sur)':'var(--sur2)'}">
           <td style="padding:6px 10px;color:var(--txt3)">${i+1}</td>
