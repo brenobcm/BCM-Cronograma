@@ -30,11 +30,27 @@ nav{background:var(--primary);color:#fff;height:58px;display:flex;align-items:ce
 .sector-section{margin-bottom:24px}
 .sector-section h2{font-size:14px;font-weight:600;color:var(--txt2);margin-bottom:10px;display:flex;align-items:center;gap:6px}
 .sector-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
-.sector-card{background:var(--sur);border-radius:10px;padding:14px 16px;border:1px solid var(--brd);border-left:4px solid var(--accent)}
-.sector-card .s-name{font-size:13px;font-weight:700;color:var(--txt);margin-bottom:8px}
+.sector-card{background:var(--sur);border-radius:10px;border:1px solid var(--brd);border-left:4px solid var(--accent);cursor:pointer;transition:box-shadow .15s,transform .1s;overflow:hidden}
+.sector-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.1);transform:translateY(-1px)}
+.sector-card-hdr{padding:14px 16px}
+.sector-card .s-name{font-size:13px;font-weight:700;color:var(--txt);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+.sector-card .s-caret{font-size:10px;color:var(--txt3);transition:transform .2s}
+.sector-card.open .s-caret{transform:rotate(180deg)}
 .sector-card .s-row{display:flex;justify-content:space-between;font-size:12px;margin-top:4px}
 .sector-card .s-label{color:var(--txt3)}
 .sector-card .s-value{font-weight:600;color:var(--txt2)}
+/* Card detail panel */
+.sector-detail{display:none;border-top:1px solid var(--brd);background:var(--sur2)}
+.sector-card.open .sector-detail{display:block}
+.sector-detail table{width:100%;border-collapse:collapse}
+.sector-detail td,.sector-detail th{padding:7px 14px;font-size:12px;text-align:left}
+.sector-detail th{color:var(--txt3);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--brd)}
+.sector-detail tr:not(:last-child) td{border-bottom:1px solid var(--brd)}
+/* Sortable table headers */
+thead th{cursor:pointer;user-select:none;white-space:nowrap}
+thead th:hover{background:rgba(255,255,255,.15)}
+.sort-arrow{margin-left:4px;opacity:.5;font-size:10px}
+.sort-arrow.active{opacity:1}
 
 /* Table */
 table{width:100%;border-collapse:collapse;background:var(--sur);border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.06)}
@@ -97,8 +113,8 @@ td{padding:12px 16px;font-size:13px;color:var(--txt)}
     <h2>🏭 Custos por Setor de Trabalho</h2>
     <div class="sector-grid" id="sector-grid"></div>
   </div>
-  <table>
-    <thead><tr><th>Funcionário</th><th>Cargo</th><th>Setor de Trabalho</th><th>Custo/hora</th><th>H/dia</th><th>Conta no sistema</th><th>Status</th><th></th></tr></thead>
+  <table id="emp-table">
+    <thead><tr id="thead-row"></tr></thead>
     <tbody id="tbody"></tbody>
   </table>
 </div>
@@ -186,6 +202,80 @@ const sb = createClient('https://fkndewrridhgwwkrjmmc.supabase.co','sb_publishab
 
 const ROLE=localStorage.getItem('bcm_role');
 let editId=null, users=[];
+let sortBy='name', sortDir='asc';
+
+// Colunas da tabela: [key, label, sortType]
+const TABLE_COLS=[
+  ['name',    'Funcionário',      'str'],
+  ['role',    'Cargo',            'str'],
+  ['sector',  'Setor de Trabalho','str'],
+  ['hourly_rate','Custo/hora',    'num'],
+  ['daily_hours','H/dia',         'num'],
+  ['user_id', 'Conta no Sistema', 'str'],
+  ['active',  'Status',           'str'],
+  [null,      '',                 null ],
+];
+
+function renderHeader(){
+  document.getElementById('thead-row').innerHTML = TABLE_COLS.map(([key,label,type])=>{
+    if(!key) return `<th style="width:80px"></th>`;
+    const isActive = sortBy===key;
+    const arrow = type ? `<span class="sort-arrow ${isActive?'active':''}">${isActive?(sortDir==='asc'?'▲':'▼'):'⇅'}</span>` : '';
+    return `<th onclick="${type?`setSort('${key}')`:''}">
+      ${label}${arrow}
+    </th>`;
+  }).join('');
+}
+
+function setSort(col){
+  if(sortBy===col) sortDir=sortDir==='asc'?'desc':'asc';
+  else{ sortBy=col; sortDir='asc'; }
+  renderHeader();
+  renderTable(window._empList||[], window._userMap||{});
+}
+
+function sortList(list){
+  const col=sortBy;
+  return [...list].sort((a,b)=>{
+    let va=a[col], vb=b[col];
+    // nulls last
+    if(va==null && vb==null) return 0;
+    if(va==null) return 1;
+    if(vb==null) return -1;
+    // numeric
+    if(typeof va==='number'||typeof vb==='number'){ va=+va||0; vb=+vb||0; }
+    else { va=String(va).toLowerCase(); vb=String(vb).toLowerCase(); }
+    const cmp = va<vb?-1:va>vb?1:0;
+    return sortDir==='asc'?cmp:-cmp;
+  });
+}
+
+function renderTable(list, userMap){
+  window._empList=list; window._userMap=userMap;
+  const sorted=sortList(list);
+  document.getElementById('tbody').innerHTML=sorted.length?sorted.map(e=>`
+    <tr>
+      <td><div style="display:flex;align-items:center;gap:10px">
+        <span class="avatar">${initials(e.name)}</span>
+        <div><div style="font-weight:600">${esc(e.name)}</div><div style="font-size:11px;color:var(--txt3)">${esc(e.email||'')}</div></div>
+      </div></td>
+      <td><span class="role-tag">${esc(e.role||'—')}</span></td>
+      <td><span class="role-tag" style="background:var(--sur2)">${esc(e.sector||'—')}</span></td>
+      <td><span class="rate">${fmt(e.hourly_rate)}</span></td>
+      <td style="text-align:center">${e.daily_hours||9}h</td>
+      <td style="font-size:12px;color:var(--txt3)">${e.user_id&&userMap[e.user_id]?'🔗 '+esc(userMap[e.user_id].name):'—'}</td>
+      <td><span class="dot ${e.active?'dot-on':'dot-off'}"></span>${e.active?'Ativo':'Inativo'}</td>
+      <td>
+        <button class="icon-btn" onclick='editEmp(${JSON.stringify(e)})' title="Editar">✏️</button>
+        <button class="icon-btn" onclick="toggleActive(${e.id},${e.active})" title="${e.active?'Desativar':'Ativar'}">${e.active?'🔒':'🔓'}</button>
+      </td>
+    </tr>`).join(''):'<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--txt3)">Nenhum funcionário cadastrado.</td></tr>';
+}
+
+function toggleSector(id){
+  const card=document.getElementById(id);
+  if(card) card.classList.toggle('open');
+}
 
 async function init(){
   const{data:{session}}=await sb.auth.getSession();
@@ -240,23 +330,37 @@ async function load(){
     </div>`;
   }).join(''):'<div style="color:var(--txt3);font-size:13px">Nenhum setor cadastrado ainda.</div>';
   const userMap={};users.forEach(u=>{userMap[u.id]={name:u.name,email:u.email};});
-  document.getElementById('tbody').innerHTML=list.length?list.map(e=>`
-    <tr>
-      <td><div style="display:flex;align-items:center;gap:10px">
-        <span class="avatar">${initials(e.name)}</span>
-        <div><div style="font-weight:600">${esc(e.name)}</div><div style="font-size:11px;color:var(--txt3)">${esc(e.email||'')}</div></div>
-      </div></td>
-      <td><span class="role-tag">${esc(e.role||'—')}</span></td>
-      <td><span class="role-tag" style="background:var(--sur2)">${esc(e.sector||'—')}</span></td>
-      <td><span class="rate">${fmt(e.hourly_rate)}</span></td>
-      <td style="text-align:center">${e.daily_hours||9}h</td>
-      <td style="font-size:12px;color:var(--txt3)">${e.user_id&&userMap[e.user_id]?'🔗 '+esc(userMap[e.user_id].name):'—'}</td>
-      <td><span class="dot ${e.active?'dot-on':'dot-off'}"></span>${e.active?'Ativo':'Inativo'}</td>
-      <td>
-        <button class="icon-btn" onclick='editEmp(${JSON.stringify(e)})' title="Editar">✏️</button>
-        <button class="icon-btn" onclick="toggleActive(${e.id},${e.active})" title="${e.active?'Desativar':'Ativar'}">${e.active?'🔒':'🔓'}</button>
-      </td>
-    </tr>`).join(''):'<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--txt3)">Nenhum funcionário cadastrado.</td></tr>';
+
+  // Sector cards with expandable detail
+  const sectorKeys=Object.keys(sectors).sort((a,b)=>a==='Sem setor'?1:b==='Sem setor'?-1:a.localeCompare(b));
+  document.getElementById('sector-grid').innerHTML=sectorKeys.length?sectorKeys.map((s,i)=>{
+    const d=sectors[s];
+    const empList=list.filter(e=>e.active&&(e.sector||'Sem setor')===s);
+    const detailRows=empList.sort((a,b)=>a.name.localeCompare(b.name)).map(e=>`
+      <tr>
+        <td><div style="display:flex;align-items:center;gap:8px"><span class="avatar" style="width:26px;height:26px;font-size:10px">${initials(e.name)}</span>${esc(e.name)}</div></td>
+        <td style="color:var(--txt3)">${esc(e.role||'—')}</td>
+        <td style="font-weight:600;color:var(--ok)">${fmt(e.hourly_rate)}</td>
+        <td style="text-align:center">${e.daily_hours||9}h</td>
+      </tr>`).join('');
+    return`<div class="sector-card" id="sc-${i}" style="border-left-color:${SECTOR_COLORS[i%SECTOR_COLORS.length]}" onclick="toggleSector('sc-${i}')">
+      <div class="sector-card-hdr">
+        <div class="s-name">${esc(s)}<span class="s-caret">▼</span></div>
+        <div class="s-row"><span class="s-label">Funcionários</span><span class="s-value">${d.count}</span></div>
+        <div class="s-row"><span class="s-label">Custo/hora</span><span class="s-value" style="color:var(--ok)">${fmt(d.costH)}</span></div>
+        <div class="s-row"><span class="s-label">Custo/dia</span><span class="s-value">${fmt(d.costD)}</span></div>
+        <div class="s-row"><span class="s-label">Custo/mês (est.)</span><span class="s-value">${fmt(d.costD*22)}</span></div>
+      </div>
+      <div class="sector-detail">
+        <table><thead><tr><th>Funcionário</th><th>Cargo</th><th>Custo/h</th><th>H/dia</th></tr></thead>
+        <tbody>${detailRows||`<tr><td colspan="4" style="color:var(--txt3);text-align:center;padding:10px">Nenhum funcionário</td></tr>`}</tbody></table>
+      </div>
+    </div>`;
+  }).join(''):'<div style="color:var(--txt3);font-size:13px">Nenhum setor cadastrado ainda.</div>';
+
+  // Sortable table
+  renderHeader();
+  renderTable(list, userMap);
 }
 
 function populateUserSelect(selectedId=''){
