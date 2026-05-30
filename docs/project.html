@@ -227,22 +227,72 @@ nav,.tb,.overlay{display:none!important}
 
 <!-- New task modal -->
 <div class="overlay" id="ov-new">
-  <div class="modal">
+  <div class="modal" style="max-width:560px">
     <h3>Nova Tarefa</h3>
-    <div class="field"><label>Nome *</label><input id="nt-name"></div>
-    <div class="field">
-      <label>Categoria * <span style="font-weight:400;color:var(--txt3)">(selecione ou digite nova)</span></label>
-      <input id="nt-cat" list="cats-datalist" placeholder="Ex: ELÉTRICA" autocomplete="off">
-      <datalist id="cats-datalist"></datalist>
+
+    <!-- Tabs -->
+    <div style="display:flex;gap:0;margin-bottom:18px;background:var(--sur2);border-radius:8px;padding:3px;border:1px solid var(--brd)">
+      <button id="nt-tab-simple" onclick="switchNewTab('simple')"
+        style="flex:1;padding:7px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;background:var(--primary);color:#fff">
+        📝 Tarefa Simples
+      </button>
+      <button id="nt-tab-panel" onclick="switchNewTab('panel')"
+        style="flex:1;padding:7px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;background:none;color:var(--txt2)">
+        ⚡ A partir de Tipo de Painel
+      </button>
     </div>
-    <div class="frow">
-      <div class="field"><label>Início *</label><input type="date" id="nt-start"></div>
-      <div class="field"><label>Término *</label><input type="date" id="nt-end"></div>
+
+    <!-- Pane: Simples -->
+    <div id="nt-pane-simple">
+      <div class="field"><label>Nome *</label><input id="nt-name"></div>
+      <div class="field">
+        <label>Categoria * <span style="font-weight:400;color:var(--txt3)">(selecione ou digite nova)</span></label>
+        <input id="nt-cat" list="cats-datalist" placeholder="Ex: ELÉTRICA" autocomplete="off">
+        <datalist id="cats-datalist"></datalist>
+      </div>
+      <div class="frow">
+        <div class="field"><label>Início *</label><input type="date" id="nt-start"></div>
+        <div class="field"><label>Término *</label><input type="date" id="nt-end"></div>
+      </div>
+      <div class="field"><label>Responsável</label><input id="nt-resp"></div>
     </div>
-    <div class="field"><label>Responsável</label><input id="nt-resp"></div>
+
+    <!-- Pane: Tipo de Painel -->
+    <div id="nt-pane-panel" style="display:none">
+      <div class="field">
+        <label>Tipo de Painel *</label>
+        <select id="nt-panel-type" onchange="loadPanelActivities(this.value)">
+          <option value="">— Selecione um tipo de painel —</option>
+        </select>
+      </div>
+      <div class="frow">
+        <div class="field">
+          <label>Data de Início *</label>
+          <input type="date" id="nt-panel-start">
+          <div style="font-size:11px;color:var(--txt3);margin-top:3px">As datas finais serão calculadas pelas horas de cada atividade (9h/dia útil)</div>
+        </div>
+        <div class="field">
+          <label>Categoria no Gantt</label>
+          <input id="nt-panel-cat" placeholder="Auto: nome do painel" list="cats-datalist">
+        </div>
+      </div>
+      <!-- Activities checklist -->
+      <div id="nt-acts-wrap" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <label style="font-size:12px;color:var(--txt2);font-weight:600">Atividades a importar:</label>
+          <div style="display:flex;gap:8px">
+            <button onclick="selectAllActs(true)" style="font-size:11px;background:none;border:1px solid var(--brd);padding:3px 8px;border-radius:5px;cursor:pointer;color:var(--txt2)">✅ Todas</button>
+            <button onclick="selectAllActs(false)" style="font-size:11px;background:none;border:1px solid var(--brd);padding:3px 8px;border-radius:5px;cursor:pointer;color:var(--txt2)">☐ Nenhuma</button>
+          </div>
+        </div>
+        <div id="nt-acts-list" style="max-height:240px;overflow-y:auto;border:1px solid var(--brd);border-radius:8px"></div>
+        <div id="nt-acts-summary" style="font-size:12px;color:var(--txt2);margin-top:8px;text-align:right"></div>
+      </div>
+    </div>
+
     <div class="modal-btns">
-      <button class="btn-cancel" onclick="document.getElementById('ov-new').classList.remove('open')">Cancelar</button>
-      <button class="btn-save" onclick="saveNewTask()">Criar</button>
+      <button class="btn-cancel" onclick="closeNewTask()">Cancelar</button>
+      <button class="btn-save" id="nt-btn-save" onclick="saveNewTask()">Criar</button>
     </div>
   </div>
 </div>
@@ -526,31 +576,132 @@ async function delTask(){
 }
 
 // ─── New Task ────────────────────────────────────────────────
-function openNewTask(){
+let newTabMode='simple', panelActivities=[];
+
+function switchNewTab(mode){
+  newTabMode=mode;
+  const simple=mode==='simple';
+  document.getElementById('nt-pane-simple').style.display=simple?'':'none';
+  document.getElementById('nt-pane-panel').style.display=simple?'none':'';
+  const btnS=document.getElementById('nt-tab-simple');
+  const btnP=document.getElementById('nt-tab-panel');
+  btnS.style.background=simple?'var(--primary)':'none'; btnS.style.color=simple?'#fff':'var(--txt2)';
+  btnP.style.background=!simple?'var(--primary)':'none'; btnP.style.color=!simple?'#fff':'var(--txt2)';
+  document.getElementById('nt-btn-save').textContent=simple?'Criar':'Importar Atividades';
+}
+
+async function openNewTask(){
   const dl=document.getElementById('cats-datalist');
   dl.innerHTML=cats.map(c=>`<option value="${c.replace(/"/g,'&quot;')}">`).join('');
-  ['nt-name','nt-cat','nt-start','nt-end','nt-resp'].forEach(id=>document.getElementById(id).value='');
+  ['nt-name','nt-cat','nt-start','nt-end','nt-resp','nt-panel-start','nt-panel-cat'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('nt-acts-wrap').style.display='none';
+  // Load panel types
+  const{data:pts}=await sb.from('panel_types').select('id,code,name').order('code');
+  const sel=document.getElementById('nt-panel-type');
+  sel.innerHTML='<option value="">— Selecione um tipo de painel —</option>'+(pts||[]).map(p=>`<option value="${p.id}" data-code="${esc(p.code)}" data-name="${esc(p.name)}">${esc(p.code)} — ${esc(p.name)}</option>`).join('');
+  panelActivities=[];
+  switchNewTab('simple');
   document.getElementById('ov-new').classList.add('open');
   setTimeout(()=>document.getElementById('nt-name').focus(),100);
 }
+
+function closeNewTask(){document.getElementById('ov-new').classList.remove('open');}
+
+async function loadPanelActivities(panelId){
+  if(!panelId){document.getElementById('nt-acts-wrap').style.display='none';return;}
+  const{data:acts}=await sb.from('panel_activities').select('*').eq('panel_type_id',panelId).order('order_idx').order('id');
+  panelActivities=acts||[];
+  // Auto-fill category with panel code
+  const sel=document.getElementById('nt-panel-type');
+  const opt=sel.options[sel.selectedIndex];
+  document.getElementById('nt-panel-cat').value=opt?.dataset?.code||'';
+
+  const wrap=document.getElementById('nt-acts-wrap');
+  const list=document.getElementById('nt-acts-list');
+  if(!panelActivities.length){
+    list.innerHTML='<div style="padding:16px;text-align:center;color:var(--txt3);font-size:13px">Nenhuma atividade cadastrada para este tipo.</div>';
+    wrap.style.display='';
+    return;
+  }
+  list.innerHTML=panelActivities.map((a,i)=>`
+    <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-bottom:1px solid var(--brd);${i===panelActivities.length-1?'border:none':''}">
+      <input type="checkbox" id="act-chk-${a.id}" checked style="margin-top:2px;width:16px;height:16px;accent-color:var(--accent);flex-shrink:0" onchange="updateActsSummary()">
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600;color:var(--txt)">${esc(a.name)}</div>
+        ${a.description?`<div style="font-size:11px;color:var(--txt3);margin-top:2px">${esc(a.description)}</div>`:''}
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:12px;font-weight:700;color:var(--accent)">${a.std_hours||0}h</div>
+        <div style="font-size:10px;color:var(--txt3)">≈${Math.ceil((a.std_hours||1)/9)} dia(s)</div>
+      </div>
+    </div>`).join('');
+  wrap.style.display='';
+  updateActsSummary();
+}
+
+function updateActsSummary(){
+  const checked=panelActivities.filter(a=>document.getElementById('act-chk-'+a.id)?.checked);
+  const totalH=checked.reduce((s,a)=>s+(+a.std_hours||0),0);
+  document.getElementById('nt-acts-summary').innerHTML=
+    `<strong>${checked.length}</strong> de ${panelActivities.length} atividades selecionadas · <strong>${totalH}h</strong> total · ≈${Math.ceil(totalH/9)} dias úteis`;
+}
+
+function selectAllActs(val){
+  panelActivities.forEach(a=>{const el=document.getElementById('act-chk-'+a.id);if(el)el.checked=val;});
+  updateActsSummary();
+}
+
+// Add working days to a date (skip weekends)
+function addWorkDays(dateStr, days){
+  const d=new Date(dateStr+'T00:00:00'); let added=0;
+  while(added<days){d.setDate(d.getDate()+1);if(d.getDay()!==0&&d.getDay()!==6)added++;}
+  return d.toISOString().split('T')[0];
+}
+
 async function saveNewTask(){
-  const name=document.getElementById('nt-name').value.trim();
-  const cat=document.getElementById('nt-cat').value.trim().toUpperCase();
-  const sd=document.getElementById('nt-start').value;
-  const ed=document.getElementById('nt-end').value;
-  if(!name||!cat||!sd||!ed){alert('Preencha nome, categoria, início e término');return;}
-  const{error}=await sb.from('tasks').insert({
-    project_id:PID,category:cat,
-    name,start_date:sd,end_date:ed,
-    responsible:document.getElementById('nt-resp').value.trim()||null,
-    progress:0,order_idx:999
-  });
-  if(error){alert(error.message);return;}
-  document.getElementById('ov-new').classList.remove('open');
+  if(newTabMode==='simple'){
+    const name=document.getElementById('nt-name').value.trim();
+    const cat=document.getElementById('nt-cat').value.trim().toUpperCase();
+    const sd=document.getElementById('nt-start').value;
+    const ed=document.getElementById('nt-end').value;
+    if(!name||!cat||!sd||!ed){alert('Preencha nome, categoria, início e término');return;}
+    const{error}=await sb.from('tasks').insert({
+      project_id:PID,category:cat,name,start_date:sd,end_date:ed,
+      responsible:document.getElementById('nt-resp').value.trim()||null,
+      progress:0,order_idx:999
+    });
+    if(error){alert(error.message);return;}
+  } else {
+    // Panel mode
+    const sd=document.getElementById('nt-panel-start').value;
+    const cat=(document.getElementById('nt-panel-cat').value.trim().toUpperCase())||'PAINEL';
+    if(!sd){alert('Informe a data de início');return;}
+    const selected=panelActivities.filter(a=>document.getElementById('act-chk-'+a.id)?.checked);
+    if(!selected.length){alert('Selecione ao menos uma atividade');return;}
+    const btn=document.getElementById('nt-btn-save');
+    btn.disabled=true; btn.textContent='Criando...';
+
+    // Create tasks sequentially — each starts after previous ends
+    let curStart=sd;
+    const rows=selected.map((a,i)=>{
+      const days=Math.max(1,Math.ceil((a.std_hours||8)/9));
+      const end=addWorkDays(curStart,days-1);
+      const row={project_id:PID,category:cat,name:a.name,
+        start_date:curStart,end_date:end,
+        duration:a.std_hours||0,responsible:null,progress:0,order_idx:Date.now()+i};
+      curStart=addWorkDays(end,1); // next starts day after
+      return row;
+    });
+    const{error}=await sb.from('tasks').insert(rows);
+    if(error){alert(error.message);btn.disabled=false;btn.textContent='Importar Atividades';return;}
+    btn.disabled=false; btn.textContent='Importar Atividades';
+  }
+  closeNewTask();
   await loadTasks();
 }
 
-['ov-task','ov-new','ov-members'].forEach(id=>{document.getElementById(id).onclick=e=>{if(e.target.id===id)document.getElementById(id).classList.remove('open');};});
+['ov-task','ov-members'].forEach(id=>{document.getElementById(id).onclick=e=>{if(e.target.id===id)document.getElementById(id).classList.remove('open');};});
+document.getElementById('ov-new').onclick=e=>{if(e.target.id==='ov-new')closeNewTask();};
 
 // ─── Members ─────────────────────────────────────────────────
 async function openMembers(){
