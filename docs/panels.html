@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>BCM — Tipos de Painel</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--primary:#0d1f3c;--accent:#0284c7;--bg:#edf1f7;--sur:#fff;--sur2:#f4f7fb;--brd:#dde3ed;--txt:#1e293b;--txt2:#475569;--txt3:#94a3b8}
@@ -71,6 +72,11 @@ td{padding:10px 16px;font-size:13px}
   <div class="page-hdr">
     <h1>⚡ Tipos de Painel</h1>
     <span style="flex:1"></span>
+    <a href="template_paineis.xlsx" download class="btn-new" style="background:var(--sur2);color:var(--txt2);border:1.5px solid var(--brd);text-decoration:none;margin-right:8px;font-size:13px">⬇ Template</a>
+    <label class="btn-new" style="background:#166534;cursor:pointer;margin-right:8px;font-size:13px">
+      📥 Importar Excel
+      <input type="file" id="import-input" accept=".xlsx,.xls" style="display:none" onchange="importPanels(this)">
+    </label>
     <button class="btn-new" onclick="openNewPanel()">＋ Novo Tipo</button>
   </div>
   <div class="layout">
@@ -89,6 +95,34 @@ td{padding:10px 16px;font-size:13px}
       <div id="act-body">
         <div class="empty">← Selecione um tipo de painel para ver suas atividades padrão</div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Import preview modal -->
+<div class="overlay" id="ov-import">
+  <div class="modal" style="max-width:800px">
+    <h3>📥 Importar Painéis e Atividades</h3>
+    <div style="font-size:13px;color:var(--txt2);margin-bottom:14px">Revise os dados antes de confirmar:</div>
+    <!-- Tabs -->
+    <div style="display:flex;gap:4px;margin-bottom:12px;border-bottom:2px solid var(--brd)">
+      <button id="imp-tab1" onclick="switchImpTab(1)" style="padding:6px 16px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:600;color:var(--accent);border-bottom:2px solid var(--accent);margin-bottom:-2px">Tipos de Painel</button>
+      <button id="imp-tab2" onclick="switchImpTab(2)" style="padding:6px 16px;border:none;background:none;cursor:pointer;font-size:13px;color:var(--txt2);border-bottom:2px solid transparent;margin-bottom:-2px">Atividades</button>
+    </div>
+    <div id="imp-pane1" style="max-height:340px;overflow-y:auto;border:1px solid var(--brd);border-radius:8px;margin-bottom:12px">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead id="imp-thead1"></thead><tbody id="imp-tbody1"></tbody>
+      </table>
+    </div>
+    <div id="imp-pane2" style="display:none;max-height:340px;overflow-y:auto;border:1px solid var(--brd);border-radius:8px;margin-bottom:12px">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead id="imp-thead2"></thead><tbody id="imp-tbody2"></tbody>
+      </table>
+    </div>
+    <div id="imp-summary" style="font-size:13px;color:var(--txt2);margin-bottom:14px"></div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeImport()">Cancelar</button>
+      <button class="btn-save" id="btn-confirm" onclick="confirmImport()">✅ Confirmar Importação</button>
     </div>
   </div>
 </div>
@@ -223,7 +257,165 @@ async function saveActivity(){
 }
 async function deleteActivity(){if(!editActId||!confirm('Excluir esta atividade?'))return;await sb.from('panel_activities').delete().eq('id',editActId);closeActivity();loadActivities(selectedPanel.id);}
 
-['ov-panel','ov-act'].forEach(id=>{document.getElementById(id).onclick=e=>{if(e.target.id===id)document.getElementById(id).classList.remove('open');};});
+['ov-panel','ov-act','ov-import'].forEach(id=>{document.getElementById(id).onclick=e=>{if(e.target.id===id)document.getElementById(id).classList.remove('open');};});
+
+// ── IMPORTAÇÃO ─────────────────────────────────────────────
+let importPanelRows=[], importActRows=[];
+
+function switchImpTab(n){
+  document.getElementById('imp-pane1').style.display=n===1?'block':'none';
+  document.getElementById('imp-pane2').style.display=n===2?'block':'none';
+  [1,2].forEach(i=>{
+    const btn=document.getElementById('imp-tab'+i);
+    const on=i===n;
+    btn.style.color=on?'var(--accent)':'var(--txt2)';
+    btn.style.borderBottom=on?'2px solid var(--accent)':'2px solid transparent';
+    btn.style.fontWeight=on?'600':'400';
+  });
+}
+
+function parseSheet(ws,headerRow=4){
+  const json=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+  // find header row (contains required keywords)
+  let hdrIdx=-1;
+  for(let i=0;i<Math.min(json.length,8);i++){
+    const row=json[i].map(c=>String(c).toLowerCase());
+    if(row.some(c=>c.includes('código')||c.includes('nome'))){hdrIdx=i;break;}
+  }
+  if(hdrIdx===-1)return[];
+  const headers=json[hdrIdx].map(h=>String(h).trim());
+  return json.slice(hdrIdx+1).filter(r=>r.some(c=>c!==''));
+}
+
+function importPanels(input){
+  const file=input.files[0]; if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const wb2=XLSX.read(e.target.result,{type:'array'});
+      // Sheet 1: panel types
+      const ws1=wb2.Sheets[wb2.SheetNames[0]];
+      const json1=XLSX.utils.sheet_to_json(ws1,{header:1,defval:''});
+      let hdr1=-1;
+      for(let i=0;i<Math.min(json1.length,8);i++){
+        if(json1[i].some(c=>String(c).toLowerCase().includes('código'))){hdr1=i;break;}
+      }
+      const rows1=hdr1>=0?json1.slice(hdr1+1):[];
+      importPanelRows=rows1.filter(r=>r[0]||r[1]).map(r=>{
+        const code=String(r[0]||'').trim().replace(/\s+/g,'');
+        const name=String(r[1]||'').trim();
+        const desc=String(r[2]||'').trim()||null;
+        if(!code||!name)return null;
+        // skip example rows (green)
+        if(code.toLowerCase().includes('qgbt-380')&&name.toLowerCase().includes('1500'))return null;
+        return{code,name,description:desc};
+      }).filter(Boolean);
+
+      // Sheet 2: activities
+      const ws2=wb2.Sheets[wb2.SheetNames[1]];
+      const json2=ws2?XLSX.utils.sheet_to_json(ws2,{header:1,defval:''}):[];
+      let hdr2=-1;
+      for(let i=0;i<Math.min(json2.length,8);i++){
+        if(json2[i].some(c=>String(c).toLowerCase().includes('código'))){hdr2=i;break;}
+      }
+      const rows2=hdr2>=0?json2.slice(hdr2+1):[];
+      importActRows=rows2.filter(r=>r[0]||r[1]).map((r,idx)=>{
+        const panelCode=String(r[0]||'').trim().replace(/\s+/g,'');
+        const name=String(r[1]||'').trim();
+        const hours=parseFloat(r[2])||0;
+        const cost=parseFloat(String(r[3]||'0').replace(/[R$\s.]/g,'').replace(',','.'))||0;
+        const desc=String(r[4]||'').trim()||null;
+        const order=parseInt(r[5])||idx+1;
+        if(!panelCode||!name)return null;
+        return{panel_code:panelCode,name,std_hours:hours,unit_cost:cost,description:desc,order_idx:order};
+      }).filter(Boolean);
+
+      if(!importPanelRows.length&&!importActRows.length){alert('Nenhum dado encontrado. Use o template fornecido.');return;}
+
+      // Preview panels
+      document.getElementById('imp-thead1').innerHTML=`<tr style="background:var(--primary)">${['#','Código','Nome','Descrição'].map(h=>`<th style="padding:8px 10px;color:#fff;font-size:11px;text-align:left">${h}</th>`).join('')}</tr>`;
+      document.getElementById('imp-tbody1').innerHTML=importPanelRows.map((p,i)=>`
+        <tr style="border-bottom:1px solid var(--brd);background:${i%2===0?'var(--sur)':'var(--sur2)'}">
+          <td style="padding:6px 10px;color:var(--txt3)">${i+1}</td>
+          <td style="padding:6px 10px;font-weight:700;color:var(--accent)">${esc(p.code)}</td>
+          <td style="padding:6px 10px;font-weight:600">${esc(p.name)}</td>
+          <td style="padding:6px 10px;color:var(--txt3);font-size:11px">${esc(p.description||'—')}</td>
+        </tr>`).join('')||'<tr><td colspan="4" style="text-align:center;padding:16px;color:var(--txt3)">Nenhum tipo encontrado</td></tr>';
+
+      // Preview activities
+      document.getElementById('imp-thead2').innerHTML=`<tr style="background:var(--primary)">${['#','Cód. Painel','Atividade','Horas','Custo Unit.','Ordem'].map(h=>`<th style="padding:8px 10px;color:#fff;font-size:11px;text-align:left">${h}</th>`).join('')}</tr>`;
+      const panelCodes=new Set(importPanelRows.map(p=>p.code));
+      document.getElementById('imp-tbody2').innerHTML=importActRows.map((a,i)=>{
+        const valid=panelCodes.has(a.panel_code);
+        return`<tr style="border-bottom:1px solid var(--brd);background:${!valid?'#fff5f5':i%2===0?'var(--sur)':'var(--sur2)'}">
+          <td style="padding:6px 10px;color:var(--txt3)">${i+1}</td>
+          <td style="padding:6px 10px;font-weight:700;color:${valid?'var(--accent)':'var(--err)'}" title="${valid?'':'Código não encontrado na aba de painéis'}">${esc(a.panel_code)}${!valid?' ⚠️':''}</td>
+          <td style="padding:6px 10px;font-weight:600">${esc(a.name)}</td>
+          <td style="padding:6px 10px;text-align:right">${a.std_hours}h</td>
+          <td style="padding:6px 10px;text-align:right">R$ ${a.unit_cost.toFixed(2)}</td>
+          <td style="padding:6px 10px;text-align:center;color:var(--txt3)">${a.order_idx}</td>
+        </tr>`;
+      }).join('')||'<tr><td colspan="6" style="text-align:center;padding:16px;color:var(--txt3)">Nenhuma atividade encontrada</td></tr>';
+
+      const warns=importActRows.filter(a=>!panelCodes.has(a.panel_code)).length;
+      document.getElementById('imp-summary').innerHTML=`
+        <strong>${importPanelRows.length}</strong> tipo(s) de painel e
+        <strong>${importActRows.length}</strong> atividade(s) prontos para importar.
+        ${warns?`<span style="color:var(--err)"> ⚠️ ${warns} atividade(s) com código de painel não reconhecido serão ignoradas.</span>`:''}`;
+
+      document.getElementById('ov-import').classList.add('open');
+      switchImpTab(1);
+    }catch(err){alert('Erro ao ler arquivo: '+err.message);}
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function closeImport(){document.getElementById('ov-import').classList.remove('open');document.getElementById('import-input').value='';}
+
+async function confirmImport(){
+  if(!importPanelRows.length&&!importActRows.length)return;
+  const btn=document.getElementById('btn-confirm');
+  btn.disabled=true; btn.textContent='Importando...';
+
+  let okP=0,okA=0,skipP=0,skipA=0;
+  const codeToId={};
+
+  // Insert panels
+  for(const p of importPanelRows){
+    const{data,error}=await sb.from('panel_types').insert({code:p.code,name:p.name,description:p.description}).select('id,code').single();
+    if(error){skipP++;continue;}
+    codeToId[p.code]=data.id; okP++;
+  }
+
+  // Also fetch existing panels to handle duplicates that already exist
+  const{data:existing}=await sb.from('panel_types').select('id,code');
+  (existing||[]).forEach(p=>{if(!codeToId[p.code])codeToId[p.code]=p.id;});
+
+  // Insert activities
+  const actBatch=importActRows.filter(a=>codeToId[a.panel_code]).map(a=>({
+    panel_type_id:codeToId[a.panel_code],name:a.name,
+    std_hours:a.std_hours,unit_cost:a.unit_cost,
+    description:a.description,order_idx:a.order_idx
+  }));
+  skipA=importActRows.length-actBatch.length;
+
+  if(actBatch.length){
+    const{error}=await sb.from('panel_activities').insert(actBatch);
+    if(error){
+      // try one by one
+      for(const a of actBatch){
+        const{error:e2}=await sb.from('panel_activities').insert(a);
+        if(e2)skipA++;else okA++;
+      }
+    }else okA=actBatch.length;
+  }
+
+  btn.disabled=false; btn.textContent='✅ Confirmar Importação';
+  closeImport(); importPanelRows=[]; importActRows=[];
+  alert(`✅ Importação concluída!\n${okP} painel(is) criado(s) • ${okA} atividade(s) criada(s)${(skipP+skipA)>0?'\n⚠️ '+(skipP+skipA)+' item(ns) ignorado(s)':''}`);
+  loadPanels();
+}
+
 init();
 </script>
 </body>
