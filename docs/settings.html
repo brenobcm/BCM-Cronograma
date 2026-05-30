@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BCM — Configurações</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--primary:#0d1f3c;--accent:#0284c7;--bg:#edf1f7;--sur:#fff;--sur2:#f4f7fb;--brd:#dde3ed;--txt:#1e293b;--txt2:#475569;--txt3:#94a3b8;--ok:#16a34a;--err:#dc2626}
+html.dark{--bg:#0e1626;--sur:#131f33;--sur2:#182540;--brd:#243050;--txt:#dde4f0;--txt2:#8fa3c0;--txt3:#4d6080}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--txt)}
+nav{background:var(--primary);color:#fff;height:58px;display:flex;align-items:center;padding:0 24px;gap:12px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.nav-sep{flex:1}
+.nav-btn{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);color:#fff;padding:5px 12px;border-radius:6px;font-size:13px;cursor:pointer;text-decoration:none}
+.dk-btn{background:none;border:1px solid rgba(255,255,255,.3);color:#fff;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:15px}
+.page{max-width:1100px;margin:0 auto;padding:28px 20px}
+.page-hdr{margin-bottom:28px}
+.page-hdr h1{font-size:22px}
+.page-hdr p{font-size:13px;color:var(--txt2);margin-top:4px}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+@media(max-width:700px){.two-col{grid-template-columns:1fr}}
+/* Section */
+.section{background:var(--sur);border-radius:14px;border:1px solid var(--brd);overflow:hidden}
+.section-hdr{background:var(--primary);color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center}
+.section-hdr h2{font-size:15px;font-weight:600}
+.section-hdr p{font-size:11px;opacity:.75;margin-top:2px}
+.btn-add{background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.3);color:#fff;padding:5px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer}
+.btn-add:hover{background:rgba(255,255,255,.3)}
+.list-body{padding:0}
+.list-item{display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--brd)}
+.list-item:last-child{border:none}
+.list-item:hover{background:var(--sur2)}
+.item-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.item-dot.on{background:var(--ok)}.item-dot.off{background:var(--txt3)}
+.item-name{font-size:13px;font-weight:600;flex:1}
+.item-desc{font-size:11px;color:var(--txt3);margin-top:2px}
+.item-actions{display:flex;gap:4px;flex-shrink:0}
+.icon-btn{background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:5px;color:var(--txt3);font-size:13px}
+.icon-btn:hover{color:var(--accent);background:var(--sur2)}
+.empty{padding:28px;text-align:center;color:var(--txt3);font-size:13px}
+/* Stats chips */
+.chip{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--sur2);color:var(--txt2);border:1px solid var(--brd)}
+/* Modal */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center}
+.overlay.open{display:flex}
+.modal{background:var(--sur);border-radius:16px;padding:28px;width:100%;max-width:420px;box-shadow:0 8px 40px rgba(0,0,0,.2)}
+.modal h3{font-size:17px;margin-bottom:18px}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:12px;color:var(--txt2);margin-bottom:4px}
+.field input,.field textarea{width:100%;padding:8px 10px;border:1.5px solid var(--brd);border-radius:7px;font-size:13px;color:var(--txt);background:var(--sur);outline:none}
+.field input:focus,.field textarea:focus{border-color:var(--accent)}
+.modal-btns{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
+.btn-cancel{background:var(--sur2);border:1px solid var(--brd);color:var(--txt2);padding:7px 14px;border-radius:7px;cursor:pointer;font-size:13px}
+.btn-save{background:var(--accent);color:#fff;border:none;padding:7px 16px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600}
+.btn-del{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;padding:7px 12px;border-radius:7px;cursor:pointer;font-size:13px;margin-right:auto}
+</style>
+</head>
+<body>
+<nav>
+  <img src="bcm-logo.jpg" alt="BCM" style="height:36px;background:#fff;padding:3px 6px;border-radius:6px">
+  <a href="dash.html" class="nav-btn">← Obras</a>
+  <a href="employees.html" class="nav-btn">👷 Funcionários</a>
+  <span class="nav-sep"></span>
+  <span style="font-size:13px;opacity:.8" id="nav-user"></span>
+  <button class="dk-btn" id="dk-btn">🌙</button>
+  <button class="nav-btn" onclick="logout()">Sair</button>
+</nav>
+
+<div class="page">
+  <div class="page-hdr">
+    <h1>⚙️ Dados Mestres</h1>
+    <p>Gerencie os cargos e setores de trabalho disponíveis para cadastro de funcionários.</p>
+  </div>
+  <div class="two-col">
+    <!-- CARGOS -->
+    <div class="section">
+      <div class="section-hdr">
+        <div>
+          <h2>💼 Cargos / Funções</h2>
+          <p id="jt-count">Carregando...</p>
+        </div>
+        <button class="btn-add" onclick="openModal('jt')">＋ Novo Cargo</button>
+      </div>
+      <div class="list-body" id="jt-list"></div>
+    </div>
+    <!-- SETORES -->
+    <div class="section">
+      <div class="section-hdr">
+        <div>
+          <h2>🏭 Setores de Trabalho</h2>
+          <p id="ws-count">Carregando...</p>
+        </div>
+        <button class="btn-add" onclick="openModal('ws')">＋ Novo Setor</button>
+      </div>
+      <div class="list-body" id="ws-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Cargo modal -->
+<div class="overlay" id="ov-jt">
+  <div class="modal">
+    <h3 id="jt-title">Novo Cargo</h3>
+    <div class="field"><label>Nome do Cargo *</label><input id="jt-name" placeholder="Ex: Eletricista Industrial"></div>
+    <div class="modal-btns">
+      <button class="btn-del" id="jt-del" style="display:none" onclick="deleteItem('jt')">Excluir</button>
+      <button class="btn-cancel" onclick="closeModal('jt')">Cancelar</button>
+      <button class="btn-save" onclick="saveItem('jt')">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Setor modal -->
+<div class="overlay" id="ov-ws">
+  <div class="modal">
+    <h3 id="ws-title">Novo Setor</h3>
+    <div class="field"><label>Nome do Setor *</label><input id="ws-name" placeholder="Ex: Montagem de Campo"></div>
+    <div class="field"><label>Descrição (opcional)</label><textarea id="ws-desc" rows="2" placeholder="Descreva as atividades deste setor..."></textarea></div>
+    <div class="modal-btns">
+      <button class="btn-del" id="ws-del" style="display:none" onclick="deleteItem('ws')">Excluir</button>
+      <button class="btn-cancel" onclick="closeModal('ws')">Cancelar</button>
+      <button class="btn-save" onclick="saveItem('ws')">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const{createClient}=supabase;
+const sb=createClient('https://fkndewrridhgwwkrjmmc.supabase.co','sb_publishable_49gXUr0vbSdYLcHJXorglg_zVfhREcY');
+(function(){const DK='gantt-dark';function apply(on){document.documentElement.classList.toggle('dark',on);const b=document.getElementById('dk-btn');if(b)b.textContent=on?'☀️':'🌙';}apply(localStorage.getItem(DK)==='1');document.getElementById('dk-btn').onclick=function(){const on=!document.documentElement.classList.contains('dark');localStorage.setItem(DK,on?'1':'0');apply(on);};})();
+
+const ROLE=localStorage.getItem('bcm_role');
+let editId={jt:null,ws:null};
+
+async function init(){
+  const{data:{session}}=await sb.auth.getSession();
+  if(!session||ROLE==='cliente'||ROLE==='tecnico'){window.location.href='dash.html';return;}
+  document.getElementById('nav-user').textContent=(localStorage.getItem('bcm_name')||'')+' ('+ROLE+')';
+  load();
+}
+async function logout(){await sb.auth.signOut();localStorage.clear();window.location.href='index.html';}
+function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+async function load(){
+  await Promise.all([loadJT(), loadWS()]);
+}
+
+async function loadJT(){
+  const{data:list}=await sb.from('job_titles').select('*').order('name');
+  const active=(list||[]).filter(x=>x.active).length;
+  document.getElementById('jt-count').textContent=`${active} ativos · ${(list||[]).length-active} inativos`;
+  document.getElementById('jt-list').innerHTML=(list||[]).length?(list||[]).map(j=>`
+    <div class="list-item">
+      <span class="item-dot ${j.active?'on':'off'}"></span>
+      <div style="flex:1"><div class="item-name">${esc(j.name)}</div></div>
+      <div class="item-actions">
+        <button class="icon-btn" onclick="editItem('jt',${j.id},'${esc(j.name).replace(/'/g,"\\'")}','')" title="Editar">✏️</button>
+        <button class="icon-btn" onclick="toggleItem('jt',${j.id},${j.active})" title="${j.active?'Desativar':'Ativar'}">${j.active?'🔒':'🔓'}</button>
+      </div>
+    </div>`).join(''):'<div class="empty">Nenhum cargo cadastrado.</div>';
+}
+
+async function loadWS(){
+  const{data:list}=await sb.from('work_sectors').select('*').order('name');
+  const active=(list||[]).filter(x=>x.active).length;
+  document.getElementById('ws-count').textContent=`${active} ativos · ${(list||[]).length-active} inativos`;
+  document.getElementById('ws-list').innerHTML=(list||[]).length?(list||[]).map(s=>`
+    <div class="list-item">
+      <span class="item-dot ${s.active?'on':'off'}"></span>
+      <div style="flex:1">
+        <div class="item-name">${esc(s.name)}</div>
+        ${s.description?`<div class="item-desc">${esc(s.description)}</div>`:''}
+      </div>
+      <div class="item-actions">
+        <button class="icon-btn" onclick="editItem('ws',${s.id},'${esc(s.name).replace(/'/g,"\\'")}','${esc(s.description||'').replace(/'/g,"\\'")}')">✏️</button>
+        <button class="icon-btn" onclick="toggleItem('ws',${s.id},${s.active})">${s.active?'🔒':'🔓'}</button>
+      </div>
+    </div>`).join(''):'<div class="empty">Nenhum setor cadastrado.</div>';
+}
+
+function openModal(type){
+  editId[type]=null;
+  document.getElementById(`${type}-title`).textContent=type==='jt'?'Novo Cargo':'Novo Setor';
+  document.getElementById(`${type}-del`).style.display='none';
+  document.getElementById(`${type}-name`).value='';
+  if(type==='ws') document.getElementById('ws-desc').value='';
+  document.getElementById(`ov-${type}`).classList.add('open');
+  setTimeout(()=>document.getElementById(`${type}-name`).focus(),100);
+}
+function editItem(type,id,name,desc){
+  editId[type]=id;
+  document.getElementById(`${type}-title`).textContent=type==='jt'?'Editar Cargo':'Editar Setor';
+  document.getElementById(`${type}-del`).style.display=ROLE==='admin'?'':'none';
+  document.getElementById(`${type}-name`).value=name;
+  if(type==='ws') document.getElementById('ws-desc').value=desc||'';
+  document.getElementById(`ov-${type}`).classList.add('open');
+}
+function closeModal(type){document.getElementById(`ov-${type}`).classList.remove('open');}
+
+async function saveItem(type){
+  const name=document.getElementById(`${type}-name`).value.trim();
+  if(!name){alert('Informe o nome');return;}
+  const table=type==='jt'?'job_titles':'work_sectors';
+  const body=type==='jt'?{name}:{name,description:document.getElementById('ws-desc').value.trim()||null};
+  const fn=editId[type]?
+    sb.from(table).update(body).eq('id',editId[type]):
+    sb.from(table).insert(body);
+  const{error}=await fn;
+  if(error){alert(error.message.includes('unique')?'Já existe um item com este nome.':error.message);return;}
+  closeModal(type);
+  type==='jt'?loadJT():loadWS();
+}
+async function deleteItem(type){
+  if(!editId[type]||!confirm('Excluir este item? Funcionários que o utilizam não serão afetados.'))return;
+  await sb.from(type==='jt'?'job_titles':'work_sectors').delete().eq('id',editId[type]);
+  closeModal(type);
+  type==='jt'?loadJT():loadWS();
+}
+async function toggleItem(type,id,cur){
+  await sb.from(type==='jt'?'job_titles':'work_sectors').update({active:!cur}).eq('id',id);
+  type==='jt'?loadJT():loadWS();
+}
+
+['ov-jt','ov-ws'].forEach(id=>{document.getElementById(id).onclick=e=>{if(e.target.id===id)document.getElementById(id).classList.remove('open');};});
+init();
+</script>
+</body>
+</html>

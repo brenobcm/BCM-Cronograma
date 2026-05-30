@@ -60,6 +60,7 @@ html.dark .s-done{background:#1e3a5f;color:#93c5fd}
   <span class="nav-user" id="nav-user"></span>
   <a href="employees.html" class="nav-btn" id="link-emp" style="display:none">👷 Equipe</a>
   <a href="panels.html" class="nav-btn" id="link-panels" style="display:none">⚡ Painéis</a>
+  <a href="settings.html" class="nav-btn" id="link-settings" style="display:none">⚙️ Dados Mestres</a>
   <a href="users.html" class="nav-btn" id="link-users" style="display:none">Usuários</a>
   <button class="dk-btn" id="dk-btn">🌙</button>
   <button class="nav-btn" onclick="logout()">Sair</button>
@@ -112,7 +113,11 @@ async function init() {
   document.getElementById('nav-user').textContent = name + ' (' + role + ')';
   if (role === 'admin' || role === 'gestor') document.getElementById('btn-new').style.display = 'flex';
   if (role === 'admin') document.getElementById('link-users').style.display = '';
-  if (role === 'admin' || role === 'gestor') { document.getElementById('link-emp').style.display=''; document.getElementById('link-panels').style.display=''; }
+  if (role === 'admin' || role === 'gestor') {
+    document.getElementById('link-emp').style.display='';
+    document.getElementById('link-panels').style.display='';
+    document.getElementById('link-settings').style.display='';
+  }
   load();
 }
 

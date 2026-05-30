@@ -90,6 +90,7 @@ td{padding:12px 16px;font-size:13px;color:var(--txt)}
 <nav>
   <img src="bcm-logo.jpg" alt="BCM" style="height:36px;background:#fff;padding:3px 6px;border-radius:6px">
   <a href="dash.html" class="nav-btn">← Obras</a>
+  <a href="settings.html" class="nav-btn" title="Gerenciar Cargos e Setores">⚙️ Dados Mestres</a>
   <span class="nav-sep"></span>
   <span style="font-size:13px;opacity:.8" id="nav-user"></span>
   <button class="dk-btn" id="dk-btn">🌙</button>
@@ -100,7 +101,7 @@ td{padding:12px 16px;font-size:13px;color:var(--txt)}
   <div class="page-hdr">
     <h1>👷 Funcionários</h1>
     <span style="flex:1"></span>
-    <a href="template_funcionarios.xlsx" download class="btn-new" style="background:var(--sur2);color:var(--txt2);border:1.5px solid var(--brd);text-decoration:none;margin-right:8px">⬇ Baixar Template</a>
+    <button class="btn-new" onclick="downloadTemplate()" style="background:var(--sur2);color:var(--txt2);border:1.5px solid var(--brd);margin-right:8px">⬇ Baixar Template</button>
     <label class="btn-new" style="background:#166534;cursor:pointer;margin-right:8px">
       📥 Importar Excel
       <input type="file" id="import-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="importExcel(this)">
@@ -147,34 +148,14 @@ td{padding:12px 16px;font-size:13px;color:var(--txt)}
       <div class="field"><label>E-mail</label><input id="f-email" type="email" placeholder="joao@bcm.com.br"></div>
       <div class="field"><label>Telefone</label><input id="f-phone" placeholder="(11) 99999-9999"></div>
       <div class="field">
-        <label>Cargo / Função <span style="font-weight:400;color:var(--txt3)">(selecione ou digite novo)</span></label>
-        <input id="f-role" list="roles-list" placeholder="Selecione ou digite novo cargo..." autocomplete="off">
-        <datalist id="roles-list">
-          <option>Engenheiro Eletricista</option>
-          <option>Técnico em Automação</option>
-          <option>Eletricista Industrial</option>
-          <option>Programador CLP</option>
-          <option>Assistente Técnico</option>
-          <option>Supervisor de Obras</option>
-          <option>Auxiliar Elétrico</option>
-          <option>Projetista</option>
-          <option>Gerente de Projetos</option>
-          <option>Técnico de Campo</option>
-          <option>Encarregado de Obras</option>
-          <option>Operador de Painel</option>
-        </datalist>
-        <div style="font-size:11px;color:var(--txt3);margin-top:4px">💡 Digite livremente para criar um novo cargo não listado</div>
+        <label>Cargo / Função *</label>
+        <select id="f-role"><option value="">— Selecione —</option></select>
+        <div style="font-size:11px;color:var(--txt3);margin-top:3px">Não encontrou? <a href="settings.html" target="_blank" style="color:var(--accent)">Cadastre em ⚙️ Dados Mestres →</a></div>
       </div>
       <div class="field">
-        <label>Setor de Trabalho <span style="font-weight:400;color:var(--txt3)">(selecione ou digite)</span></label>
-        <input id="f-sector" list="sector-list" placeholder="Ex: Engenharia de Automação" autocomplete="off">
-        <datalist id="sector-list">
-          <option>Engenharia Elétrica</option><option>Engenharia de Software</option>
-          <option>Engenharia de Automação</option><option>Projetos</option>
-          <option>Montagem de Painel</option><option>Montagem de Campo</option>
-          <option>Comissionamento</option><option>Manutenção</option>
-          <option>Administrativo</option><option>Suporte Técnico</option>
-        </datalist>
+        <label>Setor de Trabalho *</label>
+        <select id="f-sector"><option value="">— Selecione —</option></select>
+        <div style="font-size:11px;color:var(--txt3);margin-top:3px">Não encontrou? <a href="settings.html" target="_blank" style="color:var(--accent)">Cadastre em ⚙️ Dados Mestres →</a></div>
       </div>
       <div class="field"><label>Custo por Hora (R$)</label><input id="f-rate" type="number" min="0" step="0.01" placeholder="0,00"></div>
       <div class="field"><label>Horas por Dia Útil</label><input id="f-daily" type="number" min="1" max="24" step="0.5" value="9"></div>
@@ -201,7 +182,7 @@ const sb = createClient('https://fkndewrridhgwwkrjmmc.supabase.co','sb_publishab
 (function(){const DK='gantt-dark';function apply(on){document.documentElement.classList.toggle('dark',on);const b=document.getElementById('dk-btn');if(b)b.textContent=on?'☀️':'🌙';}apply(localStorage.getItem(DK)==='1');document.getElementById('dk-btn').onclick=function(){const on=!document.documentElement.classList.contains('dark');localStorage.setItem(DK,on?'1':'0');apply(on);};})();
 
 const ROLE=localStorage.getItem('bcm_role');
-let editId=null, users=[];
+let editId=null, users=[], jobTitles=[], workSectors=[];
 let sortBy='name', sortDir='asc';
 
 // Colunas da tabela: [key, label, sortType]
@@ -272,6 +253,78 @@ function renderTable(list, userMap){
     </tr>`).join(''):'<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--txt3)">Nenhum funcionário cadastrado.</td></tr>';
 }
 
+function populateSelects(selectedRole, selectedSector){
+  const rs=document.getElementById('f-role');
+  rs.innerHTML='<option value="">— Selecione o Cargo —</option>'+
+    jobTitles.map(j=>`<option${j.name===selectedRole?' selected':''}>${esc(j.name)}</option>`).join('');
+  const ss=document.getElementById('f-sector');
+  ss.innerHTML='<option value="">— Selecione o Setor —</option>'+
+    workSectors.map(s=>`<option${s.name===selectedSector?' selected':''}>${esc(s.name)}</option>`).join('');
+}
+
+async function downloadTemplate(){
+  // Garante listas atualizadas do banco
+  const[{data:jt},{data:ws}]=await Promise.all([
+    sb.from('job_titles').select('name').eq('active',true).order('name'),
+    sb.from('work_sectors').select('name').eq('active',true).order('name'),
+  ]);
+  const cargos=(jt||[]).map(j=>j.name);
+  const setores=(ws||[]).map(s=>s.name);
+
+  const wb=XLSX.utils.book_new();
+  const NAVY='0D1F3C'; const REQ='FFD6D6'; const OPT='E8F4FD'; const GREEN='DCFCE7';
+
+  // Helper: cell style
+  function cell(v,style={}){return{v,s:style};}
+
+  const headers=['Nome Completo *','E-mail','Telefone','Cargo / Função *','Setor de Trabalho *','Custo por Hora (R$) *','Horas por Dia Útil *','Ativo (SIM/NÃO) *'];
+  const required=[true,false,false,true,true,true,true,true];
+
+  const aoa=[];
+  // Row 1: title
+  aoa.push([{v:'BCM — Importação de Funcionários',s:{font:{bold:true,color:{rgb:'FFFFFF'},sz:13},fill:{fgColor:{rgb:NAVY}},alignment:{horizontal:'center'}}},...Array(7).fill({v:''})]);
+  // Row 2: legend
+  aoa.push([{v:'🔴 Obrigatório (fundo rosa)  |  🔵 Opcional (fundo azul)  |  🟢 Linha de exemplo',...Array(7).fill({v:''})}]);
+  // Row 3: headers
+  aoa.push(headers.map((h,i)=>({v:h,s:{font:{bold:true,color:{rgb:'FFFFFF'},sz:10},fill:{fgColor:{rgb:NAVY}},alignment:{horizontal:'center',wrapText:true}}})));
+  // Row 4: example
+  aoa.push(['João da Silva','joao@bcm.com.br','(37) 99999-9999',cargos[0]||'',setores[0]||'',55,9,'SIM'].map(v=>({v,s:{font:{italic:true,color:{rgb:'444444'}},fill:{fgColor:{rgb:GREEN}}}})));
+  // Rows 5-104: data
+  for(let r=0;r<100;r++){
+    aoa.push(headers.map((_,i)=>({v:i===6?9:i===7?'SIM':'',s:{fill:{fgColor:{rgb:required[i]?REQ:OPT}}}})));
+  }
+
+  const ws_sheet=XLSX.utils.aoa_to_sheet(aoa);
+
+  // Set column widths
+  ws_sheet['!cols']=[{wch:28},{wch:32},{wch:18},{wch:26},{wch:28},{wch:18},{wch:16},{wch:14}];
+
+  // Data validations
+  ws_sheet['!datavalidation']=[
+    {sqref:'D5:D104',type:'list',formula1:'"'+cargos.join(',')+'"',showErrorMessage:true,errorTitle:'Cargo inválido',error:'Selecione um cargo da lista cadastrada no sistema.'},
+    {sqref:'E5:E104',type:'list',formula1:'"'+setores.join(',')+'"',showErrorMessage:true,errorTitle:'Setor inválido',error:'Selecione um setor da lista cadastrada no sistema.'},
+    {sqref:'H5:H104',type:'list',formula1:'"SIM,NÃO"',showErrorMessage:true,errorTitle:'Valor inválido',error:'Digite SIM ou NÃO'},
+  ];
+
+  // Merge title row
+  ws_sheet['!merges']=[
+    {s:{r:0,c:0},e:{r:0,c:7}},{s:{r:1,c:0},e:{r:1,c:7}}
+  ];
+
+  XLSX.utils.book_append_sheet(wb,ws_sheet,'Funcionários');
+
+  // Sheet 2: valid values reference
+  const ref_data=[
+    ['Cargos / Funções Cadastrados','','Setores de Trabalho Cadastrados'],
+    ...Array.from({length:Math.max(cargos.length,setores.length)},(_,i)=>[cargos[i]||'','',setores[i]||''])
+  ];
+  const ws_ref=XLSX.utils.aoa_to_sheet(ref_data);
+  ws_ref['!cols']=[{wch:35},{wch:4},{wch:35}];
+  XLSX.utils.book_append_sheet(wb,ws_ref,'Valores Válidos');
+
+  XLSX.writeFile(wb,'template_funcionarios_bcm.xlsx');
+}
+
 function toggleSector(id){
   const card=document.getElementById(id);
   if(card) card.classList.toggle('open');
@@ -281,8 +334,12 @@ async function init(){
   const{data:{session}}=await sb.auth.getSession();
   if(!session||ROLE==='cliente'){window.location.href='dash.html';return;}
   document.getElementById('nav-user').textContent=(localStorage.getItem('bcm_name')||'')+' ('+ROLE+')';
-  const{data:u}=await sb.from('profiles').select('id,name,email');
-  users=u||[];
+  const[{data:u},{data:jt},{data:ws}]=await Promise.all([
+    sb.from('profiles').select('id,name,email'),
+    sb.from('job_titles').select('id,name').eq('active',true).order('name'),
+    sb.from('work_sectors').select('id,name').eq('active',true).order('name'),
+  ]);
+  users=u||[]; jobTitles=jt||[]; workSectors=ws||[];
   load();
 }
 async function logout(){await sb.auth.signOut();localStorage.clear();window.location.href='index.html';}
@@ -362,7 +419,8 @@ function openNew(){
   editId=null;
   document.getElementById('m-title').textContent='Novo Funcionário';
   document.getElementById('btn-del').style.display='none';
-  ['f-name','f-email','f-phone','f-role','f-sector','f-rate'].forEach(id=>document.getElementById(id).value='');
+  ['f-name','f-email','f-phone','f-rate'].forEach(id=>document.getElementById(id).value='');
+  populateSelects('','');
   document.getElementById('f-daily').value='9';
   populateUserSelect();
   document.getElementById('ov').classList.add('open');
@@ -374,8 +432,7 @@ function editEmp(e){
   document.getElementById('f-name').value=e.name||'';
   document.getElementById('f-email').value=e.email||'';
   document.getElementById('f-phone').value=e.phone||'';
-  document.getElementById('f-role').value=e.role||'';
-  document.getElementById('f-sector').value=e.sector||'';
+  populateSelects(e.role||'', e.sector||'');
   document.getElementById('f-rate').value=e.hourly_rate||0;
   document.getElementById('f-daily').value=e.daily_hours||9;
   populateUserSelect(e.user_id||'');
