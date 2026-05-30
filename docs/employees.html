@@ -318,17 +318,6 @@ async function load(){
     sectors[s].costD+=(+e.hourly_rate||0)*(+e.daily_hours||9);
   });
   const SECTOR_COLORS=['#3b82f6','#8b5cf6','#10b981','#f59e0b','#ef4444','#06b6d4','#ec4899','#84cc16','#f97316','#6366f1'];
-  const sectorKeys=Object.keys(sectors).sort();
-  document.getElementById('sector-grid').innerHTML=sectorKeys.length?sectorKeys.map((s,i)=>{
-    const d=sectors[s];
-    return`<div class="sector-card" style="border-left-color:${SECTOR_COLORS[i%SECTOR_COLORS.length]}">
-      <div class="s-name">${esc(s)}</div>
-      <div class="s-row"><span class="s-label">Funcionários</span><span class="s-value">${d.count}</span></div>
-      <div class="s-row"><span class="s-label">Custo/hora</span><span class="s-value" style="color:var(--ok)">${fmt(d.costH)}</span></div>
-      <div class="s-row"><span class="s-label">Custo/dia</span><span class="s-value">${fmt(d.costD)}</span></div>
-      <div class="s-row"><span class="s-label">Custo/mês (est.)</span><span class="s-value">${fmt(d.costD*22)}</span></div>
-    </div>`;
-  }).join(''):'<div style="color:var(--txt3);font-size:13px">Nenhum setor cadastrado ainda.</div>';
   const userMap={};users.forEach(u=>{userMap[u.id]={name:u.name,email:u.email};});
 
   // Sector cards with expandable detail
