@@ -21,10 +21,20 @@ nav{background:var(--primary);color:#fff;height:58px;display:flex;align-items:ce
 .btn-new{background:var(--accent);color:#fff;border:none;padding:8px 18px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer}
 
 /* Stats */
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-bottom:24px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-bottom:16px}
 .stat{background:var(--sur);border-radius:12px;padding:16px 20px;border:1px solid var(--brd)}
 .stat .val{font-size:24px;font-weight:700;color:var(--accent)}
 .stat .lbl{font-size:12px;color:var(--txt3);margin-top:2px}
+.stat .sub{font-size:11px;color:var(--txt2);margin-top:3px}
+/* Setor cards */
+.sector-section{margin-bottom:24px}
+.sector-section h2{font-size:14px;font-weight:600;color:var(--txt2);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.sector-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.sector-card{background:var(--sur);border-radius:10px;padding:14px 16px;border:1px solid var(--brd);border-left:4px solid var(--accent)}
+.sector-card .s-name{font-size:13px;font-weight:700;color:var(--txt);margin-bottom:8px}
+.sector-card .s-row{display:flex;justify-content:space-between;font-size:12px;margin-top:4px}
+.sector-card .s-label{color:var(--txt3)}
+.sector-card .s-value{font-weight:600;color:var(--txt2)}
 
 /* Table */
 table{width:100%;border-collapse:collapse;background:var(--sur);border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.06)}
@@ -83,8 +93,12 @@ td{padding:12px 16px;font-size:13px;color:var(--txt)}
   </div>
 
   <div class="stats" id="stats"></div>
+  <div class="sector-section">
+    <h2>🏭 Custos por Setor de Trabalho</h2>
+    <div class="sector-grid" id="sector-grid"></div>
+  </div>
   <table>
-    <thead><tr><th>Funcionário</th><th>Cargo</th><th>Custo/hora</th><th>H/dia</th><th>Conta no sistema</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th>Funcionário</th><th>Cargo</th><th>Setor de Trabalho</th><th>Custo/hora</th><th>H/dia</th><th>Conta no sistema</th><th>Status</th><th></th></tr></thead>
     <tbody id="tbody"></tbody>
   </table>
 </div>
@@ -135,6 +149,17 @@ td{padding:12px 16px;font-size:13px;color:var(--txt)}
         </datalist>
         <div style="font-size:11px;color:var(--txt3);margin-top:4px">💡 Digite livremente para criar um novo cargo não listado</div>
       </div>
+      <div class="field">
+        <label>Setor de Trabalho <span style="font-weight:400;color:var(--txt3)">(selecione ou digite)</span></label>
+        <input id="f-sector" list="sector-list" placeholder="Ex: Engenharia de Automação" autocomplete="off">
+        <datalist id="sector-list">
+          <option>Engenharia Elétrica</option><option>Engenharia de Software</option>
+          <option>Engenharia de Automação</option><option>Projetos</option>
+          <option>Montagem de Painel</option><option>Montagem de Campo</option>
+          <option>Comissionamento</option><option>Manutenção</option>
+          <option>Administrativo</option><option>Suporte Técnico</option>
+        </datalist>
+      </div>
       <div class="field"><label>Custo por Hora (R$)</label><input id="f-rate" type="number" min="0" step="0.01" placeholder="0,00"></div>
       <div class="field"><label>Horas por Dia Útil</label><input id="f-daily" type="number" min="1" max="24" step="0.5" value="9"></div>
       <div class="field full">
@@ -182,12 +207,38 @@ async function load(){
   // stats
   const active=list.filter(e=>e.active);
   const avgRate=active.length?active.reduce((a,e)=>a+(+e.hourly_rate||0),0)/active.length:0;
+  const totalHDay=active.reduce((a,e)=>a+(+e.daily_hours||9),0);
+  const totalCostDay=active.reduce((a,e)=>a+(+e.hourly_rate||0)*(+e.daily_hours||9),0);
+  const totalCostHour=active.reduce((a,e)=>a+(+e.hourly_rate||0),0);
   document.getElementById('stats').innerHTML=`
-    <div class="stat"><div class="val">${active.length}</div><div class="lbl">Funcionários Ativos</div></div>
-    <div class="stat"><div class="val">${list.length-active.length}</div><div class="lbl">Inativos</div></div>
-    <div class="stat"><div class="val">${fmt(avgRate)}</div><div class="lbl">Custo Médio/hora</div></div>
-    <div class="stat"><div class="val">${active.reduce((a,e)=>a+(+e.daily_hours||9),0).toFixed(0)}h</div><div class="lbl">Total H/dia (equipe)</div></div>
+    <div class="stat"><div class="val">${active.length}</div><div class="lbl">Funcionários Ativos</div><div class="sub">${list.length-active.length} inativos</div></div>
+    <div class="stat"><div class="val">${fmt(avgRate)}</div><div class="lbl">Custo Médio/hora</div><div class="sub">por funcionário</div></div>
+    <div class="stat"><div class="val">${fmt(totalCostHour)}</div><div class="lbl">Custo Total/hora</div><div class="sub">toda a equipe ativa</div></div>
+    <div class="stat"><div class="val">${fmt(totalCostDay)}</div><div class="lbl">Custo Total/dia</div><div class="sub">${totalHDay.toFixed(0)}h trabalhadas/dia</div></div>
+    <div class="stat"><div class="val">${fmt(totalCostDay*22)}</div><div class="lbl">Custo Total/mês</div><div class="sub">estimativa (22 dias úteis)</div></div>
   `;
+
+  // Cards por setor
+  const sectors={};
+  active.forEach(e=>{
+    const s=e.sector||'Sem setor';
+    if(!sectors[s])sectors[s]={count:0,costH:0,costD:0};
+    sectors[s].count++;
+    sectors[s].costH+=(+e.hourly_rate||0);
+    sectors[s].costD+=(+e.hourly_rate||0)*(+e.daily_hours||9);
+  });
+  const SECTOR_COLORS=['#3b82f6','#8b5cf6','#10b981','#f59e0b','#ef4444','#06b6d4','#ec4899','#84cc16','#f97316','#6366f1'];
+  const sectorKeys=Object.keys(sectors).sort();
+  document.getElementById('sector-grid').innerHTML=sectorKeys.length?sectorKeys.map((s,i)=>{
+    const d=sectors[s];
+    return`<div class="sector-card" style="border-left-color:${SECTOR_COLORS[i%SECTOR_COLORS.length]}">
+      <div class="s-name">${esc(s)}</div>
+      <div class="s-row"><span class="s-label">Funcionários</span><span class="s-value">${d.count}</span></div>
+      <div class="s-row"><span class="s-label">Custo/hora</span><span class="s-value" style="color:var(--ok)">${fmt(d.costH)}</span></div>
+      <div class="s-row"><span class="s-label">Custo/dia</span><span class="s-value">${fmt(d.costD)}</span></div>
+      <div class="s-row"><span class="s-label">Custo/mês (est.)</span><span class="s-value">${fmt(d.costD*22)}</span></div>
+    </div>`;
+  }).join(''):'<div style="color:var(--txt3);font-size:13px">Nenhum setor cadastrado ainda.</div>';
   const userMap={};users.forEach(u=>{userMap[u.id]={name:u.name,email:u.email};});
   document.getElementById('tbody').innerHTML=list.length?list.map(e=>`
     <tr>
@@ -196,6 +247,7 @@ async function load(){
         <div><div style="font-weight:600">${esc(e.name)}</div><div style="font-size:11px;color:var(--txt3)">${esc(e.email||'')}</div></div>
       </div></td>
       <td><span class="role-tag">${esc(e.role||'—')}</span></td>
+      <td><span class="role-tag" style="background:var(--sur2)">${esc(e.sector||'—')}</span></td>
       <td><span class="rate">${fmt(e.hourly_rate)}</span></td>
       <td style="text-align:center">${e.daily_hours||9}h</td>
       <td style="font-size:12px;color:var(--txt3)">${e.user_id&&userMap[e.user_id]?'🔗 '+esc(userMap[e.user_id].name):'—'}</td>
@@ -217,7 +269,7 @@ function openNew(){
   editId=null;
   document.getElementById('m-title').textContent='Novo Funcionário';
   document.getElementById('btn-del').style.display='none';
-  ['f-name','f-email','f-phone','f-role','f-rate'].forEach(id=>document.getElementById(id).value='');
+  ['f-name','f-email','f-phone','f-role','f-sector','f-rate'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('f-daily').value='9';
   populateUserSelect();
   document.getElementById('ov').classList.add('open');
@@ -230,6 +282,7 @@ function editEmp(e){
   document.getElementById('f-email').value=e.email||'';
   document.getElementById('f-phone').value=e.phone||'';
   document.getElementById('f-role').value=e.role||'';
+  document.getElementById('f-sector').value=e.sector||'';
   document.getElementById('f-rate').value=e.hourly_rate||0;
   document.getElementById('f-daily').value=e.daily_hours||9;
   populateUserSelect(e.user_id||'');
@@ -246,6 +299,7 @@ async function saveEmployee(){
     email:document.getElementById('f-email').value.trim()||null,
     phone:document.getElementById('f-phone').value.trim()||null,
     role:document.getElementById('f-role').value.trim()||null,
+    sector:document.getElementById('f-sector').value.trim()||null,
     hourly_rate:parseFloat(document.getElementById('f-rate').value)||0,
     daily_hours:parseFloat(document.getElementById('f-daily').value)||9,
     user_id:document.getElementById('f-user').value||null,
@@ -299,6 +353,7 @@ function importExcel(input) {
         email:   headers.findIndex(h => h.toLowerCase().includes('e-mail') || h.toLowerCase().includes('email')),
         phone:   headers.findIndex(h => h.toLowerCase().includes('telefone')),
         role:    headers.findIndex(h => h.toLowerCase().includes('cargo') || h.toLowerCase().includes('fun')),
+        sector:  headers.findIndex(h => h.toLowerCase().includes('setor')),
         rate:    headers.findIndex(h => h.toLowerCase().includes('custo') || h.toLowerCase().includes('hora')),
         daily:   headers.findIndex(h => h.toLowerCase().includes('horas') || h.toLowerCase().includes('dia')),
         active:  headers.findIndex(h => h.toLowerCase().includes('ativo')),
@@ -315,6 +370,7 @@ function importExcel(input) {
           email:       idx.email >= 0  ? String(row[idx.email] || '').trim() || null : null,
           phone:       idx.phone >= 0  ? String(row[idx.phone] || '').trim() || null : null,
           role:        idx.role >= 0   ? String(row[idx.role] || '').trim() || null  : null,
+          sector:      idx.sector >= 0 ? String(row[idx.sector] || '').trim() || null : null,
           hourly_rate: idx.rate >= 0   ? parseFloat(String(row[idx.rate] || '0').replace(/[R$\s.]/g,'').replace(',','.')) || 0 : 0,
           daily_hours: idx.daily >= 0  ? parseFloat(row[idx.daily]) || 9 : 9,
           active:      activeVal !== 'NÃO' && activeVal !== 'NAO' && activeVal !== 'N',
@@ -325,7 +381,7 @@ function importExcel(input) {
 
       // Preview
       document.getElementById('import-thead').innerHTML = `
-        <tr style="background:var(--primary)">${['#','Nome','E-mail','Cargo','Custo/h','H/dia','Ativo'].map(h=>`<th style="padding:8px 10px;color:#fff;font-size:11px;text-align:left">${h}</th>`).join('')}</tr>`;
+        <tr style="background:var(--primary)">${['#','Nome','E-mail','Cargo','Setor','Custo/h','H/dia','Ativo'].map(h=>`<th style="padding:8px 10px;color:#fff;font-size:11px;text-align:left">${h}</th>`).join('')}</tr>`;
       // Valida campos obrigatórios
       const invalid = importRows.filter(r => !r.role || r.hourly_rate === undefined || r.daily_hours === undefined);
       if (invalid.length) {
@@ -339,6 +395,7 @@ function importExcel(input) {
           <td style="padding:6px 10px;font-weight:600">${esc(r.name)}</td>
           <td style="padding:6px 10px;color:var(--txt3);font-size:11px">${esc(r.email||'—')}</td>
           <td style="padding:6px 10px">${esc(r.role||'—')}</td>
+          <td style="padding:6px 10px;font-size:11px;color:var(--txt3)">${esc(r.sector||'—')}</td>
           <td style="padding:6px 10px">R$ ${(r.hourly_rate).toFixed(2)}</td>
           <td style="padding:6px 10px;text-align:center">${r.daily_hours}h</td>
           <td style="padding:6px 10px">${r.active?'✅':'❌'}</td>
