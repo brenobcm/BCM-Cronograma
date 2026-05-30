@@ -91,14 +91,24 @@ td{padding:12px 16px;font-size:13px;color:var(--txt)}
       <div class="field full"><label>Nome Completo *</label><input id="f-name" placeholder="Ex: João Silva"></div>
       <div class="field"><label>E-mail</label><input id="f-email" type="email" placeholder="joao@bcm.com.br"></div>
       <div class="field"><label>Telefone</label><input id="f-phone" placeholder="(11) 99999-9999"></div>
-      <div class="field"><label>Cargo / Função</label>
-        <input id="f-role" list="roles-list" placeholder="Ex: Eletricista">
+      <div class="field">
+        <label>Cargo / Função <span style="font-weight:400;color:var(--txt3)">(selecione ou digite novo)</span></label>
+        <input id="f-role" list="roles-list" placeholder="Selecione ou digite novo cargo..." autocomplete="off">
         <datalist id="roles-list">
-          <option>Engenheiro Eletricista</option><option>Técnico em Automação</option>
-          <option>Eletricista Industrial</option><option>Programador CLP</option>
-          <option>Assistente Técnico</option><option>Supervisor de Obras</option>
-          <option>Auxiliar Elétrico</option><option>Projetista</option>
+          <option>Engenheiro Eletricista</option>
+          <option>Técnico em Automação</option>
+          <option>Eletricista Industrial</option>
+          <option>Programador CLP</option>
+          <option>Assistente Técnico</option>
+          <option>Supervisor de Obras</option>
+          <option>Auxiliar Elétrico</option>
+          <option>Projetista</option>
+          <option>Gerente de Projetos</option>
+          <option>Técnico de Campo</option>
+          <option>Encarregado de Obras</option>
+          <option>Operador de Painel</option>
         </datalist>
+        <div style="font-size:11px;color:var(--txt3);margin-top:4px">💡 Digite livremente para criar um novo cargo não listado</div>
       </div>
       <div class="field"><label>Custo por Hora (R$)</label><input id="f-rate" type="number" min="0" step="0.01" placeholder="0,00"></div>
       <div class="field"><label>Horas por Dia Útil</label><input id="f-daily" type="number" min="1" max="24" step="0.5" value="9"></div>
