@@ -157,7 +157,14 @@ td{padding:12px 16px;font-size:13px;color:var(--txt)}
         <select id="f-sector"><option value="">— Selecione —</option></select>
         <div style="font-size:11px;color:var(--txt3);margin-top:3px">Não encontrou? <a href="settings.html" target="_blank" style="color:var(--accent)">Cadastre em ⚙️ Dados Mestres →</a></div>
       </div>
-      <div class="field"><label>Custo por Hora (R$)</label><input id="f-rate" type="number" min="0" step="0.01" placeholder="0,00"></div>
+      <div class="field">
+        <label>Salário Mensal (R$) <span style="font-weight:400;color:var(--txt3)">— preencha para calcular custo/hora automaticamente</span></label>
+        <input id="f-monthly" type="number" min="0" step="0.01" placeholder="Ex: 3.960,00" oninput="calcHourly()">
+      </div>
+      <div class="field">
+        <label>Custo por Hora (R$) <span style="font-weight:400;color:var(--txt3)">— calculado (÷220) ou manual</span></label>
+        <input id="f-rate" type="number" min="0" step="0.01" placeholder="0,00">
+      </div>
       <div class="field"><label>Horas por Dia Útil</label><input id="f-daily" type="number" min="1" max="24" step="0.5" value="9"></div>
       <div class="field full">
         <label>Conta no Sistema (opcional)</label>
@@ -251,6 +258,11 @@ function renderTable(list, userMap){
         <button class="icon-btn" onclick="toggleActive(${e.id},${e.active})" title="${e.active?'Desativar':'Ativar'}">${e.active?'🔒':'🔓'}</button>
       </td>
     </tr>`).join(''):'<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--txt3)">Nenhum funcionário cadastrado.</td></tr>';
+}
+
+function calcHourly(){
+  const monthly=parseFloat(document.getElementById('f-monthly').value)||0;
+  if(monthly>0) document.getElementById('f-rate').value=(monthly/220).toFixed(2);
 }
 
 function populateSelects(selectedRole, selectedSector){
@@ -419,7 +431,7 @@ function openNew(){
   editId=null;
   document.getElementById('m-title').textContent='Novo Funcionário';
   document.getElementById('btn-del').style.display='none';
-  ['f-name','f-email','f-phone','f-rate'].forEach(id=>document.getElementById(id).value='');
+  ['f-name','f-email','f-phone','f-rate','f-monthly'].forEach(id=>document.getElementById(id).value='');
   populateSelects('','');
   document.getElementById('f-daily').value='9';
   populateUserSelect();
@@ -432,6 +444,8 @@ function editEmp(e){
   document.getElementById('f-name').value=e.name||'';
   document.getElementById('f-email').value=e.email||'';
   document.getElementById('f-phone').value=e.phone||'';
+  document.getElementById('f-monthly').value=e.monthly_salary||0;
+  document.getElementById('f-rate').value=e.hourly_rate||0;
   populateSelects(e.role||'', e.sector||'');
   document.getElementById('f-rate').value=e.hourly_rate||0;
   document.getElementById('f-daily').value=e.daily_hours||9;
@@ -450,6 +464,7 @@ async function saveEmployee(){
     phone:document.getElementById('f-phone').value.trim()||null,
     role:document.getElementById('f-role').value.trim()||null,
     sector:document.getElementById('f-sector').value.trim()||null,
+    monthly_salary:parseFloat(document.getElementById('f-monthly').value)||0,
     hourly_rate:parseFloat(document.getElementById('f-rate').value)||0,
     daily_hours:parseFloat(document.getElementById('f-daily').value)||9,
     user_id:document.getElementById('f-user').value||null,
@@ -504,8 +519,9 @@ function importExcel(input) {
         phone:   headers.findIndex(h => h.toLowerCase().includes('telefone')),
         role:    headers.findIndex(h => h.toLowerCase().includes('cargo') || h.toLowerCase().includes('fun')),
         sector:  headers.findIndex(h => h.toLowerCase().includes('setor')),
-        rate:    headers.findIndex(h => h.toLowerCase().includes('custo') || h.toLowerCase().includes('hora')),
-        daily:   headers.findIndex(h => h.toLowerCase().includes('horas') || h.toLowerCase().includes('dia')),
+        monthly: headers.findIndex(h => h.toLowerCase().includes('salário') || h.toLowerCase().includes('salario') || h.toLowerCase().includes('mensal')),
+        rate:    headers.findIndex(h => (h.toLowerCase().includes('custo') || h.toLowerCase().includes('hora')) && !h.toLowerCase().includes('mensal')),
+        daily:   headers.findIndex(h => h.toLowerCase().includes('horas') || (h.toLowerCase().includes('dia') && !h.toLowerCase().includes('mensal'))),
         active:  headers.findIndex(h => h.toLowerCase().includes('ativo')),
       };
 
@@ -521,7 +537,14 @@ function importExcel(input) {
           phone:       idx.phone >= 0  ? String(row[idx.phone] || '').trim() || null : null,
           role:        idx.role >= 0   ? String(row[idx.role] || '').trim() || null  : null,
           sector:      idx.sector >= 0 ? String(row[idx.sector] || '').trim() || null : null,
-          hourly_rate: idx.rate >= 0   ? parseFloat(String(row[idx.rate] || '0').replace(/[R$\s.]/g,'').replace(',','.')) || 0 : 0,
+          // Se salário mensal preenchido e custo/hora vazio → calcular ÷ 220
+          ...(() => {
+            const parseBRL = v => parseFloat(String(v||'0').replace(/[R$\s]/g,'').replace(/\.(?=\d{3})/g,'').replace(',','.')) || 0;
+            const monthly  = idx.monthly >= 0 ? parseBRL(row[idx.monthly]) : 0;
+            const direct   = idx.rate >= 0    ? parseBRL(row[idx.rate])    : 0;
+            const rate     = direct > 0 ? direct : (monthly > 0 ? +(monthly/220).toFixed(2) : 0);
+            return { monthly_salary: monthly, hourly_rate: rate };
+          })(),
           daily_hours: idx.daily >= 0  ? parseFloat(row[idx.daily]) || 9 : 9,
           active:      activeVal !== 'NÃO' && activeVal !== 'NAO' && activeVal !== 'N',
         };
@@ -531,7 +554,7 @@ function importExcel(input) {
 
       // Preview
       document.getElementById('import-thead').innerHTML = `
-        <tr style="background:var(--primary)">${['#','Nome','E-mail','Cargo','Setor','Custo/h','H/dia','Ativo'].map(h=>`<th style="padding:8px 10px;color:#fff;font-size:11px;text-align:left">${h}</th>`).join('')}</tr>`;
+        <tr style="background:var(--primary)">${['#','Nome','E-mail','Cargo','Setor','Salário/mês','Custo/h','H/dia','Ativo'].map(h=>`<th style="padding:8px 10px;color:#fff;font-size:11px;text-align:left">${h}</th>`).join('')}</tr>`;
       // Valida campos obrigatórios
       const invalid = importRows.filter(r => !r.role || r.hourly_rate === undefined || r.daily_hours === undefined);
       if (invalid.length) {
@@ -546,7 +569,8 @@ function importExcel(input) {
           <td style="padding:6px 10px;color:var(--txt3);font-size:11px">${esc(r.email||'—')}</td>
           <td style="padding:6px 10px">${esc(r.role||'—')}</td>
           <td style="padding:6px 10px;font-size:11px;color:var(--txt3)">${esc(r.sector||'—')}</td>
-          <td style="padding:6px 10px">R$ ${(r.hourly_rate).toFixed(2)}</td>
+          <td style="padding:6px 10px;font-size:11px;color:var(--txt3)">${r.monthly_salary>0?'R$ '+r.monthly_salary.toLocaleString('pt-BR',{minimumFractionDigits:2}):'—'}</td>
+          <td style="padding:6px 10px;font-weight:600;color:var(--ok)">R$ ${(r.hourly_rate).toFixed(2)}${r.monthly_salary>0&&r.hourly_rate>0?'<br><span style="font-size:9px;color:var(--txt3)">calculado</span>':''}</td>
           <td style="padding:6px 10px;text-align:center">${r.daily_hours}h</td>
           <td style="padding:6px 10px">${r.active?'✅':'❌'}</td>
         </tr>`).join('');
