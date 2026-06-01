@@ -30,22 +30,16 @@ nav{background:var(--primary);color:#fff;height:58px;display:flex;align-items:ce
 .sector-section{margin-bottom:24px}
 .sector-section h2{font-size:14px;font-weight:600;color:var(--txt2);margin-bottom:10px;display:flex;align-items:center;gap:6px}
 .sector-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
-.sector-card{background:var(--sur);border-radius:10px;border:1px solid var(--brd);border-left:4px solid var(--accent);cursor:pointer;transition:box-shadow .15s,transform .1s;overflow:hidden}
+.sector-card{background:var(--sur);border-radius:10px;border:1px solid var(--brd);border-left:4px solid var(--accent);cursor:pointer;transition:box-shadow .15s,transform .1s,border-color .15s}
 .sector-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.1);transform:translateY(-1px)}
+.sector-card.open{box-shadow:0 0 0 2px var(--accent);transform:translateY(-1px)}
 .sector-card-hdr{padding:14px 16px}
 .sector-card .s-name{font-size:13px;font-weight:700;color:var(--txt);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
 .sector-card .s-caret{font-size:10px;color:var(--txt3);transition:transform .2s}
-.sector-card.open .s-caret{transform:rotate(180deg)}
+.sector-card.open .s-caret{transform:rotate(180deg);color:var(--accent)}
 .sector-card .s-row{display:flex;justify-content:space-between;font-size:12px;margin-top:4px}
 .sector-card .s-label{color:var(--txt3)}
 .sector-card .s-value{font-weight:600;color:var(--txt2)}
-/* Card detail panel */
-.sector-detail{display:none;border-top:1px solid var(--brd);background:var(--sur2)}
-.sector-card.open .sector-detail{display:block}
-.sector-detail table{width:100%;border-collapse:collapse}
-.sector-detail td,.sector-detail th{padding:7px 14px;font-size:12px;text-align:left}
-.sector-detail th{color:var(--txt3);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--brd)}
-.sector-detail tr:not(:last-child) td{border-bottom:1px solid var(--brd)}
 /* Sortable table headers */
 thead th{cursor:pointer;user-select:none;white-space:nowrap}
 thead th:hover{background:rgba(255,255,255,.15)}
@@ -112,8 +106,25 @@ td{padding:12px 16px;font-size:13px;color:var(--txt)}
 
   <div class="stats" id="stats"></div>
   <div class="sector-section">
-    <h2>🏭 Custos por Setor de Trabalho</h2>
+    <h2>🏭 Custos por Setor de Trabalho <span style="font-size:11px;font-weight:400;color:var(--txt3)">— clique em um card para ver os funcionários</span></h2>
     <div class="sector-grid" id="sector-grid"></div>
+    <!-- Painel de detalhe — largura total, aparece abaixo dos cards -->
+    <div id="sector-detail-panel" style="display:none;margin-top:16px;background:var(--sur);border-radius:12px;border:1px solid var(--brd);overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.08)">
+      <div id="sdp-header" style="padding:14px 20px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--brd)">
+        <div style="width:10px;height:10px;border-radius:50%;background:var(--accent)" id="sdp-dot"></div>
+        <span id="sdp-title" style="font-size:15px;font-weight:700"></span>
+        <span id="sdp-badges" style="display:flex;gap:8px"></span>
+        <span style="flex:1"></span>
+        <button onclick="closeSectorDetail()" style="background:none;border:none;cursor:pointer;color:var(--txt3);font-size:18px;padding:0 4px" title="Fechar">✕</button>
+      </div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;min-width:700px">
+          <thead><tr id="sdp-thead"></tr></thead>
+          <tbody id="sdp-tbody"></tbody>
+          <tfoot><tr id="sdp-tfoot"></tr></tfoot>
+        </table>
+      </div>
+    </div>
   </div>
   <!-- Barra de ações em massa (aparece ao selecionar) -->
   <div id="bulk-bar" style="display:none;background:var(--primary);color:#fff;padding:10px 16px;border-radius:10px;margin-bottom:10px;display:none;align-items:center;gap:12px">
@@ -440,9 +451,91 @@ async function downloadTemplate(){
   XLSX.writeFile(wb,'template_funcionarios_bcm.xlsx');
 }
 
-function toggleSector(id){
+let openSectorId=null;
+
+function toggleSector(id,sectorName,color){
   const card=document.getElementById(id);
-  if(card) card.classList.toggle('open');
+  if(!card)return;
+  const isOpen=card.classList.contains('open');
+
+  // Fecha todos
+  document.querySelectorAll('.sector-card.open').forEach(c=>c.classList.remove('open'));
+
+  if(isOpen){
+    closeSectorDetail();
+    openSectorId=null;
+    return;
+  }
+
+  // Abre este
+  card.classList.add('open');
+  openSectorId=id;
+
+  // Pega funcionários deste setor
+  const list=window._empList||[];
+  const empList=list.filter(e=>e.active&&(e.sector||'Sem setor')===sectorName);
+
+  // Header do painel
+  document.getElementById('sdp-dot').style.background=color;
+  document.getElementById('sdp-title').textContent=sectorName;
+
+  // Badges de resumo
+  const totalH=empList.reduce((a,e)=>a+(+e.hourly_rate||0),0);
+  const totalD=empList.reduce((a,e)=>a+(+e.hourly_rate||0)*(+e.daily_hours||9),0);
+  document.getElementById('sdp-badges').innerHTML=`
+    <span style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--sur2);color:var(--txt2)">${empList.length} funcionário(s)</span>
+    <span style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--sur2);color:var(--ok);font-weight:600">R$/h: ${fmt(totalH)}</span>
+    <span style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--sur2);color:var(--txt2)">R$/dia: ${fmt(totalD)}</span>
+    <span style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--sur2);color:var(--txt2)">R$/mês: ${fmt(totalD*22)}</span>
+  `;
+
+  // Tabela
+  document.getElementById('sdp-thead').innerHTML=`
+    ${['','Nome','Cargo','Contrato','Custo/hora','H/dia','Salário/mês (est.)','Status'].map(h=>
+      `<th style="padding:10px 16px;color:#fff;font-size:11px;text-transform:uppercase;letter-spacing:.04em;background:var(--primary);text-align:left;white-space:nowrap">${h}</th>`
+    ).join('')}`;
+
+  document.getElementById('sdp-tbody').innerHTML=empList.length?empList.sort((a,b)=>a.name.localeCompare(b.name)).map(e=>{
+    const contract=e.contract_type||'CLT';
+    const hours=contract==='PJ'?176:220;
+    const monthly=e.monthly_salary>0?e.monthly_salary:(+e.hourly_rate||0)*hours;
+    return`<tr style="border-bottom:1px solid var(--brd)" onmouseover="this.style.background='var(--sur2)'" onmouseout="this.style.background=''">
+      <td style="padding:10px 16px"><span class="avatar" style="width:30px;height:30px;font-size:11px">${initials(e.name)}</span></td>
+      <td style="padding:10px 16px">
+        <div style="font-weight:600;font-size:13px">${esc(e.name)}</div>
+        <div style="font-size:11px;color:var(--txt3)">${esc(e.email||'')}</div>
+      </td>
+      <td style="padding:10px 16px;font-size:12px">${esc(e.role||'—')}</td>
+      <td style="padding:10px 16px">
+        <span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:8px;${contract==='PJ'?'background:#dbeafe;color:#1e40af':'background:#dcfce7;color:#166534'}">${contract}</span>
+      </td>
+      <td style="padding:10px 16px;font-weight:700;color:var(--ok);white-space:nowrap">${fmt(e.hourly_rate)}</td>
+      <td style="padding:10px 16px;text-align:center">${e.daily_hours||9}h</td>
+      <td style="padding:10px 16px;white-space:nowrap">${fmt(monthly)}</td>
+      <td style="padding:10px 16px"><span class="dot ${e.active?'dot-on':'dot-off'}"></span>${e.active?'Ativo':'Inativo'}</td>
+    </tr>`;
+  }).join(''):`<tr><td colspan="8" style="padding:24px;text-align:center;color:var(--txt3)">Nenhum funcionário neste setor.</td></tr>`;
+
+  // Rodapé totais
+  const totalMonth=empList.reduce((a,e)=>{const h=(e.contract_type||'CLT')==='PJ'?176:220;return a+(e.monthly_salary>0?e.monthly_salary:(+e.hourly_rate||0)*h);},0);
+  document.getElementById('sdp-tfoot').innerHTML=`
+    <td colspan="4" style="padding:10px 16px;font-weight:700;color:var(--txt2);background:var(--sur2);font-size:12px">TOTAL — ${empList.length} funcionário(s)</td>
+    <td style="padding:10px 16px;font-weight:700;color:var(--ok);background:var(--sur2)">${fmt(totalH)}</td>
+    <td style="padding:10px 16px;background:var(--sur2)"></td>
+    <td style="padding:10px 16px;font-weight:700;background:var(--sur2)">${fmt(totalMonth)}</td>
+    <td style="padding:10px 16px;background:var(--sur2)"></td>
+  `;
+
+  // Mostra painel e rola até ele
+  const panel=document.getElementById('sector-detail-panel');
+  panel.style.display='block';
+  setTimeout(()=>panel.scrollIntoView({behavior:'smooth',block:'nearest'}),50);
+}
+
+function closeSectorDetail(){
+  document.getElementById('sector-detail-panel').style.display='none';
+  document.querySelectorAll('.sector-card.open').forEach(c=>c.classList.remove('open'));
+  openSectorId=null;
 }
 
 async function init(){
@@ -504,17 +597,14 @@ async function load(){
         <td style="font-weight:600;color:var(--ok)">${fmt(e.hourly_rate)}</td>
         <td style="text-align:center">${e.daily_hours||9}h</td>
       </tr>`).join('');
-    return`<div class="sector-card" id="sc-${i}" style="border-left-color:${SECTOR_COLORS[i%SECTOR_COLORS.length]}" onclick="toggleSector('sc-${i}')">
+    const col=SECTOR_COLORS[i%SECTOR_COLORS.length];
+    return`<div class="sector-card" id="sc-${i}" style="border-left-color:${col}" onclick="toggleSector('sc-${i}','${s.replace(/'/g,"\\'")}','${col}')">
       <div class="sector-card-hdr">
         <div class="s-name">${esc(s)}<span class="s-caret">▼</span></div>
         <div class="s-row"><span class="s-label">Funcionários</span><span class="s-value">${d.count}</span></div>
         <div class="s-row"><span class="s-label">Custo/hora</span><span class="s-value" style="color:var(--ok)">${fmt(d.costH)}</span></div>
         <div class="s-row"><span class="s-label">Custo/dia</span><span class="s-value">${fmt(d.costD)}</span></div>
         <div class="s-row"><span class="s-label">Custo/mês (est.)</span><span class="s-value">${fmt(d.costD*22)}</span></div>
-      </div>
-      <div class="sector-detail">
-        <table><thead><tr><th>Funcionário</th><th>Cargo</th><th>Custo/h</th><th>H/dia</th></tr></thead>
-        <tbody>${detailRows||`<tr><td colspan="4" style="color:var(--txt3);text-align:center;padding:10px">Nenhum funcionário</td></tr>`}</tbody></table>
       </div>
     </div>`;
   }).join(''):'<div style="color:var(--txt3);font-size:13px">Nenhum setor cadastrado ainda.</div>';
