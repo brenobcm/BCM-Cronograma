@@ -166,13 +166,30 @@ td{padding:12px 16px;font-size:13px;color:var(--txt)}
         <select id="f-sector"><option value="">— Selecione —</option></select>
         <div style="font-size:11px;color:var(--txt3);margin-top:3px">Não encontrou? <a href="settings.html" target="_blank" style="color:var(--accent)">Cadastre em ⚙️ Dados Mestres →</a></div>
       </div>
+      <!-- Tipo de contrato -->
+      <div class="field full" style="margin-bottom:14px">
+        <label>Tipo de Contrato *</label>
+        <div style="display:flex;gap:10px;margin-top:6px">
+          <label style="display:flex;align-items:center;gap:8px;padding:10px 18px;border:2px solid var(--brd);border-radius:8px;cursor:pointer;flex:1;font-size:13px;font-weight:600;transition:all .15s" id="lbl-clt">
+            <input type="radio" name="contract" id="f-clt" value="CLT" checked onchange="onContractChange()" style="accent-color:var(--accent);width:16px;height:16px">
+            🏢 CLT
+            <span style="font-weight:400;color:var(--txt3);font-size:11px">— 220h/mês</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;padding:10px 18px;border:2px solid var(--brd);border-radius:8px;cursor:pointer;flex:1;font-size:13px;font-weight:600;transition:all .15s" id="lbl-pj">
+            <input type="radio" name="contract" id="f-pj" value="PJ" onchange="onContractChange()" style="accent-color:var(--accent);width:16px;height:16px">
+            📄 PJ
+            <span style="font-weight:400;color:var(--txt3);font-size:11px">— 176h/mês</span>
+          </label>
+        </div>
+      </div>
+
       <div class="field">
-        <label>Salário Mensal (R$) <span style="font-weight:400;color:var(--txt3)">— preencha para calcular custo/hora automaticamente</span></label>
+        <label>Salário / Valor Mensal (R$) <span style="font-weight:400;color:var(--txt3)" id="monthly-hint">— calculado automaticamente (valor/hora × 220)</span></label>
         <input id="f-monthly" type="number" min="0" step="0.01" placeholder="Ex: 3.960,00" oninput="calcHourly()">
       </div>
       <div class="field">
-        <label>Custo por Hora (R$) <span style="font-weight:400;color:var(--txt3)">— calculado (÷220) ou manual</span></label>
-        <input id="f-rate" type="number" min="0" step="0.01" placeholder="0,00">
+        <label>Custo por Hora (R$) <span style="font-weight:400;color:var(--txt3)" id="rate-hint">— calculado (÷220) ou manual</span></label>
+        <input id="f-rate" type="number" min="0" step="0.01" placeholder="0,00" oninput="calcMonthly()">
       </div>
       <div class="field"><label>Horas por Dia Útil</label><input id="f-daily" type="number" min="1" max="24" step="0.5" value="9"></div>
       <div class="field full">
@@ -301,7 +318,10 @@ function renderTable(list, userMap){
         <span class="avatar">${initials(e.name)}</span>
         <div><div style="font-weight:600">${esc(e.name)}</div><div style="font-size:11px;color:var(--txt3)">${esc(e.email||'')}</div></div>
       </div></td>
-      <td><span class="role-tag">${esc(e.role||'—')}</span></td>
+      <td>
+        <span class="role-tag">${esc(e.role||'—')}</span>
+        <span style="margin-left:4px;font-size:10px;font-weight:700;padding:2px 6px;border-radius:8px;${(e.contract_type||'CLT')==='PJ'?'background:#dbeafe;color:#1e40af':'background:#dcfce7;color:#166534'}">${e.contract_type||'CLT'}</span>
+      </td>
       <td><span class="role-tag" style="background:var(--sur2)">${esc(e.sector||'—')}</span></td>
       <td><span class="rate">${fmt(e.hourly_rate)}</span></td>
       <td style="text-align:center">${e.daily_hours||9}h</td>
@@ -314,9 +334,38 @@ function renderTable(list, userMap){
     </tr>`).join(''):'<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--txt3)">Nenhum funcionário cadastrado.</td></tr>';
 }
 
+function getContractHours(){
+  return document.getElementById('f-pj')?.checked ? 176 : 220;
+}
+
+function onContractChange(){
+  const hours = getContractHours();
+  const isPJ = hours === 176;
+  // Update hints
+  document.getElementById('monthly-hint').textContent = `— calculado automaticamente (valor/hora × ${hours})`;
+  document.getElementById('rate-hint').textContent     = `— calculado (÷${hours}) ou manual`;
+  // Highlight active contract button
+  document.getElementById('lbl-clt').style.borderColor = isPJ ? 'var(--brd)' : 'var(--accent)';
+  document.getElementById('lbl-clt').style.background  = isPJ ? '' : 'rgba(2,132,199,.06)';
+  document.getElementById('lbl-pj').style.borderColor  = isPJ ? 'var(--accent)' : 'var(--brd)';
+  document.getElementById('lbl-pj').style.background   = isPJ ? 'rgba(2,132,199,.06)' : '';
+  // Recalculate
+  const monthly = parseFloat(document.getElementById('f-monthly').value)||0;
+  const rate    = parseFloat(document.getElementById('f-rate').value)||0;
+  if(monthly > 0) document.getElementById('f-rate').value = (monthly/hours).toFixed(2);
+  else if(rate > 0) document.getElementById('f-monthly').value = (rate*hours).toFixed(2);
+}
+
 function calcHourly(){
-  const monthly=parseFloat(document.getElementById('f-monthly').value)||0;
-  if(monthly>0) document.getElementById('f-rate').value=(monthly/220).toFixed(2);
+  const monthly = parseFloat(document.getElementById('f-monthly').value)||0;
+  if(monthly > 0) document.getElementById('f-rate').value = (monthly/getContractHours()).toFixed(2);
+  else document.getElementById('f-rate').value = '';
+}
+
+function calcMonthly(){
+  const rate = parseFloat(document.getElementById('f-rate').value)||0;
+  if(rate > 0) document.getElementById('f-monthly').value = (rate*getContractHours()).toFixed(2);
+  else document.getElementById('f-monthly').value = '';
 }
 
 function populateSelects(selectedRole, selectedSector){
@@ -486,6 +535,7 @@ function openNew(){
   document.getElementById('m-title').textContent='Novo Funcionário';
   document.getElementById('btn-del').style.display='none';
   ['f-name','f-email','f-phone','f-rate','f-monthly'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f-clt').checked=true; document.getElementById('f-pj').checked=false; onContractChange();
   populateSelects('','');
   document.getElementById('f-daily').value='9';
   populateUserSelect();
@@ -498,6 +548,10 @@ function editEmp(e){
   document.getElementById('f-name').value=e.name||'';
   document.getElementById('f-email').value=e.email||'';
   document.getElementById('f-phone').value=e.phone||'';
+  const isPJ=(e.contract_type||'CLT')==='PJ';
+  document.getElementById('f-clt').checked=!isPJ;
+  document.getElementById('f-pj').checked=isPJ;
+  onContractChange();
   document.getElementById('f-monthly').value=e.monthly_salary||0;
   document.getElementById('f-rate').value=e.hourly_rate||0;
   populateSelects(e.role||'', e.sector||'');
@@ -518,6 +572,7 @@ async function saveEmployee(){
     phone:document.getElementById('f-phone').value.trim()||null,
     role:document.getElementById('f-role').value.trim()||null,
     sector:document.getElementById('f-sector').value.trim()||null,
+    contract_type: document.getElementById('f-pj').checked ? 'PJ' : 'CLT',
     monthly_salary:parseFloat(document.getElementById('f-monthly').value)||0,
     hourly_rate:parseFloat(document.getElementById('f-rate').value)||0,
     daily_hours:parseFloat(document.getElementById('f-daily').value)||9,
@@ -573,8 +628,9 @@ function importExcel(input) {
         phone:   headers.findIndex(h => h.toLowerCase().includes('telefone')),
         role:    headers.findIndex(h => h.toLowerCase().includes('cargo') || h.toLowerCase().includes('fun')),
         sector:  headers.findIndex(h => h.toLowerCase().includes('setor')),
-        monthly: headers.findIndex(h => h.toLowerCase().includes('salário') || h.toLowerCase().includes('salario') || h.toLowerCase().includes('mensal')),
-        rate:    headers.findIndex(h => (h.toLowerCase().includes('custo') || h.toLowerCase().includes('hora')) && !h.toLowerCase().includes('mensal')),
+        monthly:   headers.findIndex(h => h.toLowerCase().includes('salário') || h.toLowerCase().includes('salario') || h.toLowerCase().includes('mensal')),
+        contract:  headers.findIndex(h => h.toLowerCase().includes('contrato') || h.toLowerCase().includes('clt') || h.toLowerCase().includes('pj')),
+        rate:      headers.findIndex(h => (h.toLowerCase().includes('custo') || h.toLowerCase().includes('hora')) && !h.toLowerCase().includes('mensal')),
         daily:   headers.findIndex(h => h.toLowerCase().includes('horas') || (h.toLowerCase().includes('dia') && !h.toLowerCase().includes('mensal'))),
         active:  headers.findIndex(h => h.toLowerCase().includes('ativo')),
       };
@@ -591,13 +647,17 @@ function importExcel(input) {
           phone:       idx.phone >= 0  ? String(row[idx.phone] || '').trim() || null : null,
           role:        idx.role >= 0   ? String(row[idx.role] || '').trim() || null  : null,
           sector:      idx.sector >= 0 ? String(row[idx.sector] || '').trim() || null : null,
-          // Se salário mensal preenchido e custo/hora vazio → calcular ÷ 220
+          // Contrato: CLT=220h, PJ=176h
           ...(() => {
             const parseBRL = v => parseFloat(String(v||'0').replace(/[R$\s]/g,'').replace(/\.(?=\d{3})/g,'').replace(',','.')) || 0;
-            const monthly  = idx.monthly >= 0 ? parseBRL(row[idx.monthly]) : 0;
-            const direct   = idx.rate >= 0    ? parseBRL(row[idx.rate])    : 0;
-            const rate     = direct > 0 ? direct : (monthly > 0 ? +(monthly/220).toFixed(2) : 0);
-            return { monthly_salary: monthly, hourly_rate: rate };
+            const contractRaw = idx.contract >= 0 ? String(row[idx.contract]||'CLT').trim().toUpperCase() : 'CLT';
+            const contract  = contractRaw.includes('PJ') ? 'PJ' : 'CLT';
+            const hours     = contract === 'PJ' ? 176 : 220;
+            const monthly   = idx.monthly >= 0 ? parseBRL(row[idx.monthly]) : 0;
+            const direct    = idx.rate >= 0    ? parseBRL(row[idx.rate])    : 0;
+            const rate      = direct > 0 ? direct : (monthly > 0 ? +(monthly/hours).toFixed(2) : 0);
+            const monthlySaved = monthly > 0 ? monthly : (direct > 0 ? +(direct*hours).toFixed(2) : 0);
+            return { contract_type: contract, monthly_salary: monthlySaved, hourly_rate: rate };
           })(),
           daily_hours: idx.daily >= 0  ? parseFloat(row[idx.daily]) || 9 : 9,
           active:      activeVal !== 'NÃO' && activeVal !== 'NAO' && activeVal !== 'N',
