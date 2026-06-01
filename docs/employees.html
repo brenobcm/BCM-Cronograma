@@ -704,15 +704,41 @@ async function confirmImport() {
   if (!importRows.length) return;
   const btn = document.getElementById('btn-confirm-import');
   btn.disabled = true;
-  btn.textContent = 'Importando...';
 
+  // ── 1. Criar Cargos ausentes ─────────────────────────────
+  btn.textContent = 'Verificando cargos...';
+  const cargosNovos = [...new Set(importRows.map(r=>r.role).filter(Boolean))];
+  if (cargosNovos.length) {
+    const { data: existing } = await sb.from('job_titles').select('name').in('name', cargosNovos);
+    const existingSet = new Set((existing||[]).map(j=>j.name));
+    const toCreate = cargosNovos.filter(c => !existingSet.has(c)).map(name => ({name}));
+    if (toCreate.length) {
+      await sb.from('job_titles').insert(toCreate);
+      // Atualiza lista local
+      jobTitles = [...jobTitles, ...toCreate.map((j,i)=>({id:Date.now()+i,...j}))];
+    }
+  }
+
+  // ── 2. Criar Setores ausentes ────────────────────────────
+  btn.textContent = 'Verificando setores...';
+  const setoresNovos = [...new Set(importRows.map(r=>r.sector).filter(Boolean))];
+  if (setoresNovos.length) {
+    const { data: existing } = await sb.from('work_sectors').select('name').in('name', setoresNovos);
+    const existingSet = new Set((existing||[]).map(s=>s.name));
+    const toCreate = setoresNovos.filter(s => !existingSet.has(s)).map(name => ({name}));
+    if (toCreate.length) {
+      await sb.from('work_sectors').insert(toCreate);
+      workSectors = [...workSectors, ...toCreate.map((s,i)=>({id:Date.now()+i,...s}))];
+    }
+  }
+
+  // ── 3. Inserir funcionários ──────────────────────────────
+  btn.textContent = 'Importando funcionários...';
   let ok = 0, skip = 0, errors = [];
-  // Insert in batches of 10
   for (let i = 0; i < importRows.length; i += 10) {
     const batch = importRows.slice(i, i + 10);
     const { error } = await sb.from('employees').insert(batch);
     if (error) {
-      // Try one by one to identify failures
       for (const row of batch) {
         const { error: e2 } = await sb.from('employees').insert(row);
         if (e2) { skip++; errors.push(row.name + ': ' + e2.message); }
@@ -725,11 +751,15 @@ async function confirmImport() {
   btn.textContent = '✅ Confirmar Importação';
   document.getElementById('ov-import').classList.remove('open');
   document.getElementById('import-input').value = '';
-  importRows = [];
 
-  let msg = `✅ ${ok} funcionário(s) importado(s) com sucesso!`;
+  // Resumo
+  const novosC = cargosNovos.filter(async c => true).length;
+  let msg = `✅ ${ok} funcionário(s) importado(s)!`;
+  if (cargosNovos.length) msg += `\n📋 Cargos verificados/criados: ${cargosNovos.join(', ')}`;
+  if (setoresNovos.length) msg += `\n🏭 Setores verificados/criados: ${setoresNovos.join(', ')}`;
   if (skip) msg += `\n⚠️ ${skip} ignorado(s): ${errors.slice(0,3).join(' | ')}`;
   alert(msg);
+  importRows = [];
   load();
 }
 
