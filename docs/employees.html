@@ -403,49 +403,68 @@ async function downloadTemplate(){
   // Helper: cell style
   function cell(v,style={}){return{v,s:style};}
 
-  const headers=['Nome Completo *','E-mail','Telefone','Cargo / Função *','Setor de Trabalho *','Custo por Hora (R$) *','Horas por Dia Útil *','Ativo (SIM/NÃO) *'];
-  const required=[true,false,false,true,true,true,true,true];
+  // Colunas: Nome, Email, Telefone, Cargo, Setor, Contrato, Salário Mensal, Custo/Hora, H/Dia, Ativo
+  const headers=[
+    'Nome Completo *','E-mail','Telefone','Cargo / Função *','Setor de Trabalho *',
+    'Contrato * (CLT/PJ)','Salário Mensal (R$)','Custo por Hora (R$) *','Horas por Dia Útil *','Ativo (SIM/NÃO) *'
+  ];
+  const required=[true,false,false,true,true,true,false,true,true,true];
+  const NCOLS=headers.length;
 
   const aoa=[];
   // Row 1: title
-  aoa.push([{v:'BCM — Importação de Funcionários',s:{font:{bold:true,color:{rgb:'FFFFFF'},sz:13},fill:{fgColor:{rgb:NAVY}},alignment:{horizontal:'center'}}},...Array(7).fill({v:''})]);
+  aoa.push([{v:'BCM — Importação de Funcionários',s:{font:{bold:true,color:{rgb:'FFFFFF'},sz:13},fill:{fgColor:{rgb:NAVY}},alignment:{horizontal:'center'}}},...Array(NCOLS-1).fill({v:''})]);
   // Row 2: legend
-  aoa.push([{v:'🔴 Obrigatório (fundo rosa)  |  🔵 Opcional (fundo azul)  |  🟢 Linha de exemplo',...Array(7).fill({v:''})}]);
-  // Row 3: headers
-  aoa.push(headers.map((h,i)=>({v:h,s:{font:{bold:true,color:{rgb:'FFFFFF'},sz:10},fill:{fgColor:{rgb:NAVY}},alignment:{horizontal:'center',wrapText:true}}})));
-  // Row 4: example
-  aoa.push(['João da Silva','joao@bcm.com.br','(37) 99999-9999',cargos[0]||'',setores[0]||'',55,9,'SIM'].map(v=>({v,s:{font:{italic:true,color:{rgb:'444444'}},fill:{fgColor:{rgb:GREEN}}}})));
-  // Rows 5-104: data
-  for(let r=0;r<100;r++){
-    aoa.push(headers.map((_,i)=>({v:i===6?9:i===7?'SIM':'',s:{fill:{fgColor:{rgb:required[i]?REQ:OPT}}}})));
+  aoa.push([{v:'🔴 Obrigatório   |   🔵 Opcional   |   CLT=220h/mês  PJ=176h/mês   |   Custo/hora calculado automaticamente se informar Salário Mensal'},...Array(NCOLS-1).fill({v:''})]);
+  // Row 3: instrução CLT/PJ
+  aoa.push([{v:'💡  CLT: custo/hora = salário ÷ 220h   |   PJ: custo/hora = salário ÷ 176h   |   Preencha Salário Mensal ou Custo/Hora (não precisa preencher os dois)'},...Array(NCOLS-1).fill({v:''})]);
+  // Row 4: headers
+  aoa.push(headers.map(h=>({v:h,s:{font:{bold:true,color:{rgb:'FFFFFF'},sz:10},fill:{fgColor:{rgb:NAVY}},alignment:{horizontal:'center',wrapText:true}}})));
+  // Row 5: example CLT
+  aoa.push(['João da Silva','joao@bcm.com.br','(37) 99999-9999',cargos[0]||'Eletricista Industrial',setores[0]||'Montagem de Campo','CLT',3960,18,9,'SIM'].map(v=>({v,s:{font:{italic:true,color:{rgb:'444444'}},fill:{fgColor:{rgb:GREEN}}}})));
+  // Row 6: example PJ
+  aoa.push(['Maria Santos','maria@empresa.com.br','(11) 98888-8888',cargos[1]||'Técnico em Automação',setores[1]||'Engenharia de Automação','PJ',5280,30,9,'SIM'].map(v=>({v,s:{font:{italic:true,color:{rgb:'444444'}},fill:{fgColor:{rgb:'E8F4FD'}}}})));
+  // Rows 7+: data (200 rows)
+  for(let r=0;r<200;r++){
+    aoa.push(headers.map((_,i)=>({
+      v:i===5?'CLT':i===8?9:i===9?'SIM':'',
+      s:{fill:{fgColor:{rgb:required[i]?REQ:OPT}}}
+    })));
   }
 
   const ws_sheet=XLSX.utils.aoa_to_sheet(aoa);
 
-  // Set column widths
-  ws_sheet['!cols']=[{wch:28},{wch:32},{wch:18},{wch:26},{wch:28},{wch:18},{wch:16},{wch:14}];
+  // Column widths: Nome,Email,Fone,Cargo,Setor,Contrato,Salário,Custo/h,H/dia,Ativo
+  ws_sheet['!cols']=[{wch:28},{wch:30},{wch:16},{wch:26},{wch:26},{wch:14},{wch:18},{wch:18},{wch:14},{wch:12}];
 
-  // Data validations
+  // Data validations (rows 7-206 = Excel rows 7 to 206)
   ws_sheet['!datavalidation']=[
-    {sqref:'D5:D104',type:'list',formula1:'"'+cargos.join(',')+'"',showErrorMessage:true,errorTitle:'Cargo inválido',error:'Selecione um cargo da lista cadastrada no sistema.'},
-    {sqref:'E5:E104',type:'list',formula1:'"'+setores.join(',')+'"',showErrorMessage:true,errorTitle:'Setor inválido',error:'Selecione um setor da lista cadastrada no sistema.'},
-    {sqref:'H5:H104',type:'list',formula1:'"SIM,NÃO"',showErrorMessage:true,errorTitle:'Valor inválido',error:'Digite SIM ou NÃO'},
+    {sqref:'D7:D206',type:'list',formula1:'"'+cargos.join(',')+'"',showErrorMessage:true,errorTitle:'Cargo inválido',error:'Selecione da lista ou deixe em branco para criar automaticamente.'},
+    {sqref:'E7:E206',type:'list',formula1:'"'+setores.join(',')+'"',showErrorMessage:true,errorTitle:'Setor inválido',error:'Selecione da lista ou deixe em branco para criar automaticamente.'},
+    {sqref:'F7:F206',type:'list',formula1:'"CLT,PJ"',showErrorMessage:true,errorTitle:'Contrato inválido',error:'Digite CLT ou PJ.'},
+    {sqref:'J7:J206',type:'list',formula1:'"SIM,NÃO"',showErrorMessage:true,errorTitle:'Valor inválido',error:'Digite SIM ou NÃO.'},
   ];
 
-  // Merge title row
+  // Merge title rows
   ws_sheet['!merges']=[
-    {s:{r:0,c:0},e:{r:0,c:7}},{s:{r:1,c:0},e:{r:1,c:7}}
+    {s:{r:0,c:0},e:{r:0,c:NCOLS-1}},
+    {s:{r:1,c:0},e:{r:1,c:NCOLS-1}},
+    {s:{r:2,c:0},e:{r:2,c:NCOLS-1}},
   ];
 
   XLSX.utils.book_append_sheet(wb,ws_sheet,'Funcionários');
 
-  // Sheet 2: valid values reference
+  // Sheet 2: reference values + CLT/PJ explanation
+  const maxLen=Math.max(cargos.length,setores.length,5);
   const ref_data=[
-    ['Cargos / Funções Cadastrados','','Setores de Trabalho Cadastrados'],
-    ...Array.from({length:Math.max(cargos.length,setores.length)},(_,i)=>[cargos[i]||'','',setores[i]||''])
+    ['Cargos / Funções Cadastrados','','Setores de Trabalho Cadastrados','','Tipo de Contrato','Horas/mês','Cálculo'],
+    ...Array.from({length:maxLen},(_,i)=>{
+      const contratos=i===0?['CLT','220h','Salário ÷ 220']:i===1?['PJ','176h','Salário ÷ 176']:['','',''];
+      return[cargos[i]||'','',setores[i]||'',...contratos];
+    })
   ];
   const ws_ref=XLSX.utils.aoa_to_sheet(ref_data);
-  ws_ref['!cols']=[{wch:35},{wch:4},{wch:35}];
+  ws_ref['!cols']=[{wch:35},{wch:3},{wch:35},{wch:3},{wch:16},{wch:10},{wch:20}];
   XLSX.utils.book_append_sheet(wb,ws_ref,'Valores Válidos');
 
   XLSX.writeFile(wb,'template_funcionarios_bcm.xlsx');
