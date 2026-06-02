@@ -184,7 +184,8 @@ nav,.tb,.overlay{display:none!important}
   <button class="nav-btn" id="btn-members" style="display:none" onclick="openMembers()">👥 Equipe</button>
   <a id="btn-budget" href="#" class="nav-btn" style="display:none">💰 Orçamento</a>
   <a id="btn-reports" href="#" class="nav-btn">📊 Relatórios</a>
-  <a id="btn-exec-pdf" href="#" class="nav-btn" style="background:#0284c7;border-color:#0284c7">📄 PDF</a>
+  <a id="btn-pdf-s" href="#" class="nav-btn" style="background:#0284c7;border-color:#0284c7" title="Relatório Sintético (sem financeiro)">📋 PDF Sintético</a>
+  <a id="btn-pdf-a" href="#" class="nav-btn" style="background:#6366f1;border-color:#6366f1" title="Relatório Analítico (completo)">🔍 PDF Analítico</a>
   <button class="nav-btn" onclick="printGantt()">🖨 Imprimir</button>
   <button class="dk-btn" id="dk-btn">🌙</button>
   <button class="nav-btn" onclick="logout()">Sair</button>
@@ -434,7 +435,8 @@ if(CAN_EDIT) document.getElementById('btn-baseline').style.display='';
 document.getElementById('btn-show-baseline').style.display='';
 document.getElementById('btn-budget').href='budget.html?pid='+PID;
 document.getElementById('btn-reports').href='reports.html?pid='+PID;
-document.getElementById('btn-exec-pdf').href='report-pdf.html?pid='+PID;
+document.getElementById('btn-pdf-s').href='report-pdf.html?pid='+PID+'&tipo=sintetico';
+document.getElementById('btn-pdf-a').href='report-pdf.html?pid='+PID+'&tipo=analitico';
 
 async function init() {
   const { data: { session } } = await sb.auth.getSession();

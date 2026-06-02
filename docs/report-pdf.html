@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>BCM — Relatório Executivo</title>
+<title>BCM — Relatório</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <style>
@@ -113,11 +113,22 @@ td{padding:7px 10px}
 <body>
 
 <div class="toolbar">
-  <a href="reports.html" class="btn-back">← Relatórios</a>
-  <select class="proj-sel" id="proj-sel" onchange="loadReport(this.value)">
+  <a href="reports.html" class="btn-back" id="btn-back">← Relatórios</a>
+  <select class="proj-sel" id="proj-sel" onchange="onProjChange(this.value)">
     <option value="">— Selecione a obra —</option>
   </select>
-  <h1 id="toolbar-title">Relatório Executivo</h1>
+  <!-- Seletor de tipo -->
+  <div style="display:flex;background:rgba(255,255,255,.1);border-radius:8px;padding:3px;gap:2px">
+    <button id="tipo-btn-sintetico" onclick="setTipo('sintetico')"
+      style="padding:6px 14px;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;background:var(--primary-btn,rgba(255,255,255,.15));color:#fff;transition:background .2s">
+      📋 Sintético
+    </button>
+    <button id="tipo-btn-analitico" onclick="setTipo('analitico')"
+      style="padding:6px 14px;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(255,255,255,.0);color:rgba(255,255,255,.6);transition:background .2s">
+      🔍 Analítico
+    </button>
+  </div>
+  <h1 id="toolbar-title" style="flex:1">Relatório</h1>
   <button class="btn btn-print" onclick="window.print()">🖨 Gerar PDF</button>
 </div>
 
@@ -139,19 +150,50 @@ const COLORS=['#3b82f6','#8b5cf6','#10b981','#f59e0b','#ef4444','#06b6d4','#ec48
 let charts={};
 function mkChart(id,cfg){if(charts[id])charts[id].destroy();const c=new Chart(document.getElementById(id),cfg);charts[id]=c;return c;}
 
+const params=new URLSearchParams(location.search);
+let currentPid=parseInt(params.get('pid')||'0');
+let currentTipo=params.get('tipo')||'sintetico'; // 'sintetico' | 'analitico'
+
+function setTipo(tipo){
+  currentTipo=tipo;
+  // Atualiza visual dos botões
+  const btnS=document.getElementById('tipo-btn-sintetico');
+  const btnA=document.getElementById('tipo-btn-analitico');
+  btnS.style.background=tipo==='sintetico'?'rgba(255,255,255,.25)':'rgba(255,255,255,0)';
+  btnS.style.color=tipo==='sintetico'?'#fff':'rgba(255,255,255,.6)';
+  btnA.style.background=tipo==='analitico'?'rgba(255,255,255,.25)':'rgba(255,255,255,0)';
+  btnA.style.color=tipo==='analitico'?'#fff':'rgba(255,255,255,.6)';
+  // Atualiza URL sem recarregar
+  const u=new URL(location.href);
+  u.searchParams.set('tipo',tipo);
+  if(currentPid)u.searchParams.set('pid',currentPid);
+  history.replaceState(null,'',u);
+  if(currentPid) loadReport(currentPid);
+}
+
+function onProjChange(pid){
+  currentPid=parseInt(pid)||0;
+  const u=new URL(location.href);
+  if(currentPid)u.searchParams.set('pid',currentPid); else u.searchParams.delete('pid');
+  u.searchParams.set('tipo',currentTipo);
+  history.replaceState(null,'',u);
+  loadReport(currentPid);
+}
+
 async function init(){
   const{data:{session}}=await sb.auth.getSession();
   if(!session){window.location.href='index.html';return;}
   const{data:projs}=await sb.from('projects').select('id,name').order('name');
   const sel=document.getElementById('proj-sel');
   (projs||[]).forEach(p=>sel.innerHTML+=`<option value="${p.id}">${esc(p.name)}</option>`);
-  const pid=new URLSearchParams(location.search).get('pid');
-  if(pid){sel.value=pid;loadReport(pid);}
+  // Aplica tipo inicial
+  setTipo(currentTipo);
+  if(currentPid){sel.value=currentPid;loadReport(currentPid);}
 }
 
 async function loadReport(pid){
   pid=parseInt(pid);
-  if(!pid){document.getElementById('loading').style.display='';document.getElementById('doc').style.display='none';return;}
+  if(!pid){document.getElementById('loading').innerHTML='Selecione uma obra para gerar o relatório.';document.getElementById('loading').style.display='';document.getElementById('doc').style.display='none';return;}
   document.getElementById('loading').innerHTML='⏳ Carregando dados...';
   document.getElementById('loading').style.display='';
   document.getElementById('doc').style.display='none';
@@ -167,9 +209,13 @@ async function loadReport(pid){
 
   if(!proj){document.getElementById('loading').innerHTML='Projeto não encontrado.';return;}
 
+  const isSintetico=currentTipo==='sintetico';
+  const tipoLabel=isSintetico?'Relatório Sintético':'Relatório Analítico';
   document.getElementById('loading').style.display='none';
-  document.getElementById('toolbar-title').textContent=proj.name+' — Relatório Executivo';
-  document.title='BCM — '+proj.name+' — Relatório';
+  document.getElementById('toolbar-title').textContent=proj.name+' — '+tipoLabel;
+  document.title='BCM — '+proj.name+' — '+tipoLabel;
+  // Atualiza link de volta para relatórios com pid
+  document.getElementById('btn-back').href='reports.html?pid='+pid;
 
   const today=new Date();today.setHours(0,0,0,0);
   const tList=tasks||[];
@@ -246,7 +292,7 @@ async function loadReport(pid){
   <div class="page cover">
     <div class="cover-top">
       <div class="cover-logo"><img src="bcm-logo.jpg" alt="BCM"></div>
-      <div style="font-size:12px;opacity:.5;margin-bottom:8px;text-transform:uppercase;letter-spacing:.08em">Relatório Executivo de Obra</div>
+      <div style="font-size:12px;opacity:.5;margin-bottom:8px;text-transform:uppercase;letter-spacing:.08em">${tipoLabel} de Obra</div>
       <div class="cover-title">${esc(proj.name)}</div>
       <div class="cover-sub">${esc(proj.client||'')}</div>
       <div class="cover-sub" style="opacity:.5;font-size:12px">${esc(proj.location||'')}</div>
@@ -344,9 +390,9 @@ async function loadReport(pid){
     <div class="page-footer"><span>BCM Eletricidade e Automação · ${esc(proj.name)}</span><span>Gerado em ${genDate}</span></div>
   </div>
 
-  <!-- PÁG 4: FINANCEIRO -->
-  <div class="page" style="page-break-before:always">
-    <div class="section-title"><span>💰</span> Análise Financeira</div>
+  <!-- PÁG 4: FINANCEIRO (apenas Analítico) -->
+  ${isSintetico?'':`<div class="page" style="page-break-before:always">
+    <div class="section-title"><span>💰</span> Análise Financeira</div>`}
     <div class="evm-grid">
       <div class="evm-card"><div class="ev-val">${brl(totalPrev)}</div><div class="ev-lbl">Orçamento Total</div></div>
       <div class="evm-card"><div class="ev-val">${brl(PV)}</div><div class="ev-lbl">Valor Planejado (PV)</div></div>
@@ -378,9 +424,9 @@ async function loadReport(pid){
     </table>`:''}
 
     <div class="page-footer"><span>BCM Eletricidade e Automação · ${esc(proj.name)}</span><span>Gerado em ${genDate}</span></div>
-  </div>
+  </div>`}
 
-  <!-- PÁG 5: TAREFAS + EQUIPE -->
+  <!-- PÁG 4/5: TAREFAS + EQUIPE -->
   <div class="page" style="page-break-before:always">
     <div class="section-title"><span>📋</span> Análise de Tarefas</div>
     <table>
@@ -455,7 +501,7 @@ async function loadReport(pid){
   const stCounts=[done,inprog,delayed,tList.length-done-inprog-delayed];
   mkChart('chart-status',{type:'doughnut',data:{labels:['Concluídas','Em Andamento','Atrasadas','Não Iniciadas'],datasets:[{data:stCounts,backgroundColor:['#16a34a','#d97706','#dc2626','#94a3b8'],borderWidth:2}]},options:{responsive:true,plugins:{legend:{position:'right'}}}});
 
-  if(bList.length){
+  if(!isSintetico&&bList.length){
     const catNames=[...new Set(bList.map(b=>b.cost_categories?.name||'Outros'))];
     const catPrev=catNames.map(c=>bList.filter(b=>b.cost_categories?.name===c).reduce((a,b)=>a+(+b.planned_amount||0),0));
     const catReal=catNames.map(c=>bList.filter(b=>b.cost_categories?.name===c).reduce((a,b)=>a+(+b.actual_amount||0),0));

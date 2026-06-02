@@ -87,7 +87,8 @@ html.dark .heat-3{background:#1d4ed8;color:#fff}
   </select>
   <span class="nav-sep"></span>
   <span style="font-size:13px;opacity:.8" id="nav-user"></span>
-  <a id="btn-exec-pdf" href="report-pdf.html" class="nav-btn" style="background:#0284c7;border-color:#0284c7">📄 Relatório Executivo PDF</a>
+  <a id="btn-pdf-s" href="report-pdf.html?tipo=sintetico" class="nav-btn" style="background:#0284c7;border-color:#0284c7" title="Sem dados financeiros">📋 PDF Sintético</a>
+  <a id="btn-pdf-a" href="report-pdf.html?tipo=analitico" class="nav-btn" style="background:#6366f1;border-color:#6366f1" title="Relatório completo">🔍 PDF Analítico</a>
   <button class="nav-btn" onclick="window.print()">🖨 Imprimir</button>
   <button class="dk-btn" id="dk-btn">🌙</button>
   <button class="nav-btn" onclick="logout()">Sair</button>
@@ -215,7 +216,8 @@ function mkChart(id,cfg){if(charts[id])charts[id].destroy();charts[id]=new Chart
 
 async function loadReports(pid){
   pid=parseInt(pid);if(!pid)return;
-  document.getElementById('btn-exec-pdf').href='report-pdf.html?pid='+pid;
+  document.getElementById('btn-pdf-s').href='report-pdf.html?pid='+pid+'&tipo=sintetico';
+  document.getElementById('btn-pdf-a').href='report-pdf.html?pid='+pid+'&tipo=analitico';
   const[{data:tasks},{data:budgets},{data:miles},{data:emps},{data:teData},{data:tiData}]=await Promise.all([
     sb.from('tasks').select('*').eq('project_id',pid).order('order_idx'),
     sb.from('budget_items').select('*,cost_categories(name,type)').eq('project_id',pid),
