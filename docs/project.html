@@ -113,6 +113,9 @@ html.dark .tb-btn,html.dark .zb:not(.on),html.dark .fb:not(.on){background:var(-
 .te-del{background:none;border:none;cursor:pointer;color:var(--txt3);font-size:14px;padding:0 4px}
 .te-del:hover{color:#dc2626}
 .te-form{display:grid;grid-template-columns:1fr 80px 1fr;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid var(--brd)}
+/* Baseline */
+.bar-baseline{height:6px;border-radius:3px;position:absolute;background:rgba(148,163,184,.6);border:1px solid rgba(100,116,139,.4);pointer-events:none;top:24px}
+html.dark .bar-baseline{background:rgba(71,85,105,.7);border-color:rgba(100,116,139,.5)}
 /* Dependências */
 .dep-item{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--brd);font-size:12px}
 .dep-item:last-child{border:none}
@@ -200,6 +203,8 @@ nav,.tb,.overlay{display:none!important}
   <button class="tb-btn" onclick="goToday()">📅 Hoje</button>
   <button class="tb-btn" onclick="toggleAll()">⊞ Expandir</button>
   <button class="tb-btn" id="btn-new-task" style="display:none" onclick="openNewTask()">＋ Tarefa</button>
+  <button class="tb-btn" id="btn-baseline" style="display:none" onclick="openBaseline()">📐 Baseline</button>
+  <button class="tb-btn" id="btn-show-baseline" onclick="toggleBaselineView()" title="Mostrar/ocultar baseline no Gantt" style="display:none">📐 Mostrar</button>
 </div>
 
 <div class="gantt">
@@ -369,6 +374,27 @@ nav,.tb,.overlay{display:none!important}
   </div>
 </div>
 
+<!-- Baseline modal -->
+<div class="overlay" id="ov-baseline">
+  <div class="modal" style="max-width:520px">
+    <h3>📐 Linhas de Base</h3>
+    <div class="sub">Snapshots do cronograma para comparação ao longo do tempo.</div>
+
+    <!-- Salvar nova baseline -->
+    <div style="display:flex;gap:8px;margin-bottom:18px" id="baseline-save-row">
+      <input id="baseline-name" placeholder="Nome (ex: Baseline Inicial, Rev. 1...)" style="flex:1;padding:8px 10px;border:1.5px solid var(--brd);border-radius:7px;font-size:13px;color:var(--txt);background:var(--sur);outline:none">
+      <button onclick="saveBaseline()" style="background:var(--accent);color:#fff;border:none;padding:8px 16px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600;white-space:nowrap">💾 Salvar</button>
+    </div>
+
+    <!-- Lista de baselines -->
+    <div id="baseline-list" style="max-height:320px;overflow-y:auto"></div>
+
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="document.getElementById('ov-baseline').classList.remove('open')">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Members modal -->
 <div class="overlay" id="ov-members">
   <div class="modal">
@@ -394,6 +420,7 @@ const CAN_EDIT = ROLE==='admin'||ROLE==='gestor';
 const CAN_PROG = ROLE!=='cliente';
 
 let tasks=[], cats=[], deps=[], collapsed=new Set(), activeFilter=null, zoom=5, allExp=false, modId=null;
+let activeBaseline=null, showBaseline=false; // baseline ativa para exibição no Gantt
 const TODAY=new Date(); TODAY.setHours(0,0,0,0);
 const MONTHS=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 const COLORS=['#3b82f6','#8b5cf6','#10b981','#f59e0b','#ef4444','#06b6d4','#ec4899','#84cc16','#f97316','#6366f1'];
@@ -402,6 +429,8 @@ document.getElementById('nav-user').textContent = (localStorage.getItem('bcm_nam
 if(CAN_EDIT) document.getElementById('btn-new-task').style.display='';
 if(CAN_EDIT) document.getElementById('btn-members').style.display='';
 if(CAN_EDIT) document.getElementById('btn-budget').style.display='';
+if(CAN_EDIT) document.getElementById('btn-baseline').style.display='';
+document.getElementById('btn-show-baseline').style.display='';
 document.getElementById('btn-budget').href='budget.html?pid='+PID;
 document.getElementById('btn-reports').href='reports.html?pid='+PID;
 
@@ -564,7 +593,15 @@ function draw(){
         const bx=xOf(t.start_date,PS);
         const bw=Math.max(dif(pd(t.start_date),pd(t.end_date))*zoom,4);
         barPos[t.id]={x:bx, xEnd:bx+bw, midY:y+ROW/2};
-        cv+=`<div class="g-row" style="top:${y}px;width:${W}px"><div class="bar cb${ci}" style="left:${bx}px;width:${bw}px" onclick="openTask(${t.id})"><div class="bar-fill cc${ci}" style="width:${Math.round(t.progress/100*bw)}px;opacity:.85"></div><div class="bar-lbl">${t.progress>0?t.progress+'% — ':''}${esc(t.name)}</div></div></div>`;
+        // Barra de baseline (cinza, fina, abaixo)
+        let baseBar='';
+        if(showBaseline&&activeBaseline?.map[t.id]){
+          const bt=activeBaseline.map[t.id];
+          const bbx=xOf(bt.start_date,PS);
+          const bbw=Math.max(dif(pd(bt.start_date),pd(bt.end_date))*zoom,4);
+          baseBar=`<div class="bar-baseline" style="left:${bbx}px;width:${bbw}px" title="Baseline: ${bt.start_date} → ${bt.end_date} (${bt.progress}%)"></div>`;
+        }
+        cv+=`<div class="g-row" style="top:${y}px;width:${W}px">${baseBar}<div class="bar cb${ci}" style="left:${bx}px;width:${bw}px" onclick="openTask(${t.id})"><div class="bar-fill cc${ci}" style="width:${Math.round(t.progress/100*bw)}px;opacity:.85"></div><div class="bar-lbl">${t.progress>0?t.progress+'% — ':''}${esc(t.name)}</div></div></div>`;
         y+=ROW;
       });
     }
@@ -1023,7 +1060,7 @@ async function saveNewTask(){
   await loadTasks();
 }
 
-['ov-task','ov-members'].forEach(id=>{document.getElementById(id).onclick=e=>{if(e.target.id===id)document.getElementById(id).classList.remove('open');};});
+['ov-task','ov-members','ov-baseline'].forEach(id=>{document.getElementById(id).onclick=e=>{if(e.target.id===id)document.getElementById(id).classList.remove('open');};});
 document.getElementById('ov-new').onclick=e=>{if(e.target.id==='ov-new')closeNewTask();};
 
 // ─── Members ─────────────────────────────────────────────────
@@ -1077,6 +1114,114 @@ async function removeMember(uid){
   if(!confirm('Remover este membro da obra?'))return;
   await sb.from('project_members').delete().eq('project_id',PID).eq('user_id',uid);
   await loadMembers();
+}
+
+// ─── Baseline ─────────────────────────────────────────────────
+async function openBaseline(){
+  document.getElementById('ov-baseline').classList.add('open');
+  document.getElementById('baseline-save-row').style.display=CAN_EDIT?'flex':'none';
+  // Sugere nome automático
+  if(CAN_EDIT){
+    const{data:existing}=await sb.from('baselines').select('id').eq('project_id',PID);
+    document.getElementById('baseline-name').value='Baseline '+(((existing||[]).length)+1);
+  }
+  await loadBaselineList();
+}
+
+async function loadBaselineList(){
+  const{data:bls}=await sb.from('baselines')
+    .select('id,name,created_at,profiles(name)')
+    .eq('project_id',PID).order('created_at',{ascending:false});
+  const list=document.getElementById('baseline-list');
+  if(!(bls||[]).length){
+    list.innerHTML='<div style="text-align:center;padding:24px;color:var(--txt3);font-size:13px">Nenhuma baseline salva ainda.</div>';
+    return;
+  }
+  list.innerHTML=(bls||[]).map(b=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--brd)">
+      <div style="flex:1">
+        <div style="font-weight:600;font-size:13px;color:var(--txt)">${esc(b.name)}</div>
+        <div style="font-size:11px;color:var(--txt3)">
+          ${b.created_at?.slice(0,10)||''} · por ${esc(b.profiles?.name||'—')}
+        </div>
+      </div>
+      <button onclick="applyBaseline(${b.id},${JSON.stringify(esc(b.name))})"
+        style="background:${activeBaseline?.id===b.id?'var(--primary)':'var(--sur2)'};color:${activeBaseline?.id===b.id?'#fff':'var(--txt2)'};border:1px solid var(--brd);padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">
+        ${activeBaseline?.id===b.id?'✅ Ativa':'Aplicar'}
+      </button>
+      ${CAN_EDIT?`<button onclick="deleteBaseline(${b.id})"
+        style="background:none;border:none;cursor:pointer;color:var(--txt3);font-size:16px;padding:0 4px" title="Excluir">🗑</button>`:''}
+    </div>`).join('');
+}
+
+async function saveBaseline(){
+  const name=document.getElementById('baseline-name').value.trim();
+  if(!name){alert('Informe um nome para a baseline');return;}
+  const{data:{session}}=await sb.auth.getSession();
+  // Cria registro na tabela baselines
+  const{data:bl,error}=await sb.from('baselines').insert({
+    project_id:PID, name, created_by:session.user.id
+  }).select().single();
+  if(error){alert('Erro: '+error.message);return;}
+  // Copia todas as tarefas para baseline_tasks
+  const rows=tasks.map(t=>({
+    baseline_id:bl.id,
+    task_id:t.id,
+    start_date:t.start_date,
+    end_date:t.end_date,
+    progress:t.progress
+  }));
+  const{error:e2}=await sb.from('baseline_tasks').insert(rows);
+  if(e2){alert('Erro ao salvar tarefas: '+e2.message);return;}
+  await loadBaselineList();
+  document.getElementById('baseline-name').value='';
+}
+
+async function applyBaseline(id, name){
+  if(activeBaseline?.id===id){
+    // Desativa
+    activeBaseline=null;
+    showBaseline=false;
+    document.getElementById('btn-show-baseline').textContent='📐 Mostrar';
+    document.getElementById('btn-show-baseline').style.background='';
+  } else {
+    // Carrega tasks da baseline
+    const{data:btasks}=await sb.from('baseline_tasks')
+      .select('task_id,start_date,end_date,progress')
+      .eq('baseline_id',id);
+    const map={};
+    (btasks||[]).forEach(bt=>map[bt.task_id]=bt);
+    activeBaseline={id,name,map};
+    showBaseline=true;
+    document.getElementById('btn-show-baseline').textContent='📐 '+name;
+    document.getElementById('btn-show-baseline').style.background='var(--primary)';
+    document.getElementById('btn-show-baseline').style.color='#fff';
+    document.getElementById('btn-show-baseline').style.borderColor='var(--primary)';
+  }
+  await loadBaselineList();
+  draw();
+}
+
+function toggleBaselineView(){
+  if(!activeBaseline){alert('Selecione uma baseline em 📐 Baseline primeiro.');return;}
+  showBaseline=!showBaseline;
+  const btn=document.getElementById('btn-show-baseline');
+  btn.style.background=showBaseline?'var(--primary)':'';
+  btn.style.color=showBaseline?'#fff':'';
+  btn.style.borderColor=showBaseline?'var(--primary)':'';
+  draw();
+}
+
+async function deleteBaseline(id){
+  if(!confirm('Excluir esta baseline permanentemente?'))return;
+  await sb.from('baselines').delete().eq('id',id);
+  if(activeBaseline?.id===id){
+    activeBaseline=null; showBaseline=false;
+    document.getElementById('btn-show-baseline').textContent='📐 Mostrar';
+    document.getElementById('btn-show-baseline').style.cssText='';
+    draw();
+  }
+  await loadBaselineList();
 }
 
 function printGantt(){
