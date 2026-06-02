@@ -97,6 +97,22 @@ html.dark .tb-btn,html.dark .zb:not(.on),html.dark .fb:not(.on){background:var(-
 .log-item{padding:8px 0;border-bottom:1px solid var(--brd);font-size:12px}
 .log-item:last-child{border:none}
 .frow{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+/* Alocação */
+.alloc-item{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--brd);font-size:12px}
+.alloc-item:last-child{border:none}
+.alloc-name{flex:1;font-weight:600;color:var(--txt)}
+.alloc-role{font-size:11px;color:var(--txt3)}
+.alloc-num{font-size:12px;font-weight:600;color:var(--accent);min-width:38px;text-align:right}
+.alloc-del{background:none;border:none;cursor:pointer;color:var(--txt3);font-size:14px;padding:0 4px}
+.alloc-del:hover{color:#dc2626}
+.alloc-add{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--brd)}
+.alloc-add select,.alloc-add input{padding:5px 8px;border:1.5px solid var(--brd);border-radius:6px;font-size:12px;background:var(--sur);color:var(--txt)}
+/* Horas */
+.te-item{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--brd);font-size:12px}
+.te-item:last-child{border:none}
+.te-del{background:none;border:none;cursor:pointer;color:var(--txt3);font-size:14px;padding:0 4px}
+.te-del:hover{color:#dc2626}
+.te-form{display:grid;grid-template-columns:1fr 80px 1fr;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid var(--brd)}
 
 @media print{
 @page{size:A4 landscape;margin:10mm}
@@ -196,6 +212,8 @@ nav,.tb,.overlay{display:none!important}
     <div class="mtabs">
       <button class="mtab on" onclick="tab('info')">Informações</button>
       <button class="mtab" onclick="tab('prog')">Progresso</button>
+      <button class="mtab" onclick="tab('equipe')">👷 Equipe</button>
+      <button class="mtab" onclick="tab('horas')">⏱ Horas</button>
       <button class="mtab" onclick="tab('log')">Histórico</button>
     </div>
     <div class="tab on" id="tab-info">
@@ -216,6 +234,31 @@ nav,.tb,.overlay{display:none!important}
       </div>
       <div class="field"><label>Observação</label><textarea id="pnote" rows="2" placeholder="Ex: Etapa de instalação concluída..."></textarea></div>
     </div>
+
+    <!-- Aba Equipe (task_employees) -->
+    <div class="tab" id="tab-equipe">
+      <div id="alloc-list" style="max-height:220px;overflow-y:auto"></div>
+      <div class="alloc-add" id="alloc-add-form">
+        <select id="alloc-emp" style="flex:1;min-width:140px"><option value="">— Funcionário —</option></select>
+        <input type="number" id="alloc-pct" value="100" min="1" max="100" step="5" style="width:70px" title="% Alocação">
+        <span style="font-size:11px;color:var(--txt3)">%</span>
+        <input type="number" id="alloc-ph" placeholder="Horas prev." min="0" step="0.5" style="width:90px" title="Horas planejadas">
+        <button onclick="addAllocation()" style="background:var(--accent);color:#fff;border:none;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">+ Alocar</button>
+      </div>
+    </div>
+
+    <!-- Aba Horas (time_entries) -->
+    <div class="tab" id="tab-horas">
+      <div id="te-list" style="max-height:200px;overflow-y:auto"></div>
+      <div class="te-form" id="te-add-form">
+        <select id="te-emp" style="font-size:12px;padding:5px 7px;border:1.5px solid var(--brd);border-radius:6px;background:var(--sur);color:var(--txt)"><option value="">— Funcionário —</option></select>
+        <input type="number" id="te-hours" placeholder="Horas" min="0.5" max="24" step="0.5" style="font-size:12px;padding:5px 7px;border:1.5px solid var(--brd);border-radius:6px;background:var(--sur);color:var(--txt)">
+        <input type="date" id="te-date" style="font-size:12px;padding:5px 7px;border:1.5px solid var(--brd);border-radius:6px;background:var(--sur);color:var(--txt)">
+        <input id="te-desc" placeholder="Descrição (opcional)" style="font-size:12px;padding:5px 7px;border:1.5px solid var(--brd);border-radius:6px;background:var(--sur);color:var(--txt);grid-column:1/-1">
+        <button onclick="addTimeEntry()" style="background:var(--accent);color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;grid-column:1/-1">+ Registrar Horas</button>
+      </div>
+    </div>
+
     <div class="tab" id="tab-log"><div id="log-list" style="max-height:260px;overflow-y:auto"></div></div>
     <div class="modal-btns">
       <button class="btn-del" id="mod-del" style="display:none;margin-right:auto" onclick="delTask()">Excluir</button>
@@ -506,11 +549,14 @@ function toggleAll(){if(allExp||collapsed.size>0){collapsed.clear();allExp=true;
 function goToday(){const{PS}=getRange();const x=xOf(TODAY,PS);document.getElementById('tl-body').scrollLeft=Math.max(0,x-300);}
 
 // ─── Task Modal ─────────────────────────────────────────────
+const TAB_NAMES=['info','prog','equipe','horas','log'];
 function tab(t){
-  ['info','prog','log'].forEach((n,i)=>{
+  TAB_NAMES.forEach((n,i)=>{
     document.querySelectorAll('.mtab')[i].classList.toggle('on',n===t);
     document.getElementById('tab-'+n).classList.toggle('on',n===t);
   });
+  if(t==='equipe') loadAllocation(modId);
+  if(t==='horas') loadTimeEntries(modId);
 }
 
 async function openTask(tid){
@@ -530,9 +576,16 @@ async function openTask(tid){
   document.getElementById('pslider').disabled=!CAN_PROG;
   document.getElementById('mod-save').style.display=CAN_PROG?'':'none';
   document.getElementById('mod-del').style.display=CAN_EDIT?'':'none';
+  // form de alocação e horas — visível por gestor+
+  document.getElementById('alloc-add-form').style.display=CAN_EDIT?'flex':'none';
+  document.getElementById('te-add-form').style.display=CAN_PROG?'grid':'none';
+  // pré-carrega data atual no campo de horas
+  document.getElementById('te-date').value=new Date().toISOString().split('T')[0];
   tab('info');
   document.getElementById('ov-task').classList.add('open');
   loadLog(tid);
+  // pré-carrega lista de funcionários nos selects
+  preloadEmployees();
 }
 
 async function loadLog(tid){
@@ -540,6 +593,126 @@ async function loadLog(tid){
   document.getElementById('log-list').innerHTML=(logs||[]).length?(logs||[]).map(l=>`
     <div class="log-item"><span style="font-weight:600">${esc(l.profiles?.name||'—')}</span> <span style="color:var(--txt3)">${l.created_at?.slice(0,10)}</span> → <strong>${l.progress}%</strong>${l.note?`<div style="color:var(--txt2);margin-top:2px">${esc(l.note)}</div>`:''}</div>`).join('')
     :'<div style="color:var(--txt3);font-size:13px;padding:12px 0">Nenhum registro de progresso ainda.</div>';
+}
+
+// ─── Funcionários cache ───────────────────────────────────────
+let _empCache = null;
+async function preloadEmployees(){
+  if(_empCache) return;
+  const{data}=await sb.from('employees').select('id,name,role').eq('active',true).order('name');
+  _empCache=data||[];
+}
+function empOptions(excludeIds=[]){
+  return (_empCache||[]).filter(e=>!excludeIds.includes(e.id))
+    .map(e=>`<option value="${e.id}">${esc(e.name)}${e.role?' — '+esc(e.role):''}</option>`).join('');
+}
+
+// ─── Alocação (task_employees) ────────────────────────────────
+let _allocData = [];
+async function loadAllocation(tid){
+  if(!tid)return;
+  const{data}=await sb.from('task_employees')
+    .select('id,allocation_pct,planned_hours,actual_hours,employees(id,name,role)')
+    .eq('task_id',tid).order('id');
+  _allocData=data||[];
+  const allocIds=_allocData.map(a=>a.employees?.id).filter(Boolean);
+  // lista
+  document.getElementById('alloc-list').innerHTML=_allocData.length?_allocData.map(a=>`
+    <div class="alloc-item">
+      <div style="flex:1">
+        <div class="alloc-name">${esc(a.employees?.name||'—')}</div>
+        <div class="alloc-role">${esc(a.employees?.role||'')}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="alloc-num">${a.allocation_pct||100}%</div>
+        <div style="font-size:10px;color:var(--txt3)">${a.planned_hours?a.planned_hours+'h prev.':''}</div>
+      </div>
+      <div style="text-align:right;min-width:60px">
+        <div style="font-size:12px;font-weight:600;color:#16a34a">${a.actual_hours||0}h real</div>
+      </div>
+      ${CAN_EDIT?`<button class="alloc-del" onclick="removeAllocation(${a.id})" title="Remover">✕</button>`:''}
+    </div>`).join('')
+    :'<div style="color:var(--txt3);font-size:13px;padding:12px 0">Nenhum funcionário alocado.</div>';
+  // atualiza select
+  const sel=document.getElementById('alloc-emp');
+  sel.innerHTML='<option value="">— Funcionário —</option>'+empOptions(allocIds);
+}
+
+async function addAllocation(){
+  if(!modId)return;
+  const empId=document.getElementById('alloc-emp').value;
+  if(!empId){alert('Selecione um funcionário');return;}
+  const pct=parseFloat(document.getElementById('alloc-pct').value)||100;
+  const ph=parseFloat(document.getElementById('alloc-ph').value)||null;
+  const{error}=await sb.from('task_employees').insert({
+    task_id:modId,employee_id:parseInt(empId),
+    allocation_pct:pct,planned_hours:ph
+  });
+  if(error){alert('Erro: '+error.message);return;}
+  document.getElementById('alloc-emp').value='';
+  document.getElementById('alloc-pct').value='100';
+  document.getElementById('alloc-ph').value='';
+  loadAllocation(modId);
+}
+
+async function removeAllocation(id){
+  if(!confirm('Remover alocação?'))return;
+  await sb.from('task_employees').delete().eq('id',id);
+  loadAllocation(modId);
+}
+
+// ─── Registro de Horas (time_entries) ────────────────────────
+async function loadTimeEntries(tid){
+  if(!tid)return;
+  const{data}=await sb.from('time_entries')
+    .select('id,work_date,hours,description,employees(name)')
+    .eq('task_id',tid).order('work_date',{ascending:false});
+  const entries=data||[];
+  const total=entries.reduce((s,e)=>s+(+e.hours||0),0);
+  document.getElementById('te-list').innerHTML=entries.length?`
+    <div style="font-size:11px;color:var(--txt3);margin-bottom:6px;text-align:right">Total: <strong style="color:var(--accent)">${total.toFixed(1)}h</strong></div>`+
+    entries.map(e=>`
+    <div class="te-item">
+      <div style="flex:1">
+        <div style="font-weight:600;color:var(--txt)">${esc(e.employees?.name||'—')}</div>
+        <div style="font-size:11px;color:var(--txt3)">${e.work_date?.slice(0,10)||''} ${e.description?'· '+esc(e.description):''}</div>
+      </div>
+      <div style="font-size:13px;font-weight:700;color:var(--accent);min-width:40px;text-align:right">${(+e.hours).toFixed(1)}h</div>
+      ${CAN_PROG?`<button class="te-del" onclick="removeTimeEntry(${e.id})" title="Excluir">✕</button>`:''}
+    </div>`).join('')
+    :'<div style="color:var(--txt3);font-size:13px;padding:12px 0">Nenhuma hora registrada.</div>';
+  // atualiza select
+  const sel=document.getElementById('te-emp');
+  sel.innerHTML='<option value="">— Funcionário —</option>'+empOptions();
+}
+
+async function addTimeEntry(){
+  if(!modId)return;
+  const empId=document.getElementById('te-emp').value;
+  const hours=parseFloat(document.getElementById('te-hours').value);
+  const date=document.getElementById('te-date').value;
+  const desc=document.getElementById('te-desc').value.trim();
+  if(!empId){alert('Selecione um funcionário');return;}
+  if(!hours||hours<=0){alert('Informe as horas');return;}
+  if(!date){alert('Informe a data');return;}
+  const{data:{session}}=await sb.auth.getSession();
+  const{error}=await sb.from('time_entries').insert({
+    task_id:modId,employee_id:parseInt(empId),
+    work_date:date,hours,
+    description:desc||null,
+    created_by:session.user.id
+  });
+  if(error){alert('Erro: '+error.message);return;}
+  document.getElementById('te-emp').value='';
+  document.getElementById('te-hours').value='';
+  document.getElementById('te-desc').value='';
+  loadTimeEntries(modId);
+}
+
+async function removeTimeEntry(id){
+  if(!confirm('Excluir este registro?'))return;
+  await sb.from('time_entries').delete().eq('id',id);
+  loadTimeEntries(modId);
 }
 
 function closeTask(){document.getElementById('ov-task').classList.remove('open');modId=null;}
