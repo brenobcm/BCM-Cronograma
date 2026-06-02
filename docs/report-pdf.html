@@ -114,7 +114,7 @@ td{padding:7px 10px}
 
 <div class="toolbar">
   <a href="reports.html" class="btn-back" id="btn-back">← Relatórios</a>
-  <select class="proj-sel" id="proj-sel" onchange="onProjChange(this.value)">
+  <select class="proj-sel" id="proj-sel" onchange="onProjChange(this.value)" style="min-width:200px">
     <option value="">— Selecione a obra —</option>
   </select>
   <!-- Seletor de tipo -->
@@ -150,20 +150,22 @@ const COLORS=['#3b82f6','#8b5cf6','#10b981','#f59e0b','#ef4444','#06b6d4','#ec48
 let charts={};
 function mkChart(id,cfg){if(charts[id])charts[id].destroy();const c=new Chart(document.getElementById(id),cfg);charts[id]=c;return c;}
 
-const params=new URLSearchParams(location.search);
-let currentPid=parseInt(params.get('pid')||'0');
-let currentTipo=params.get('tipo')||'sintetico'; // 'sintetico' | 'analitico'
+const _params=new URLSearchParams(location.search);
+let currentPid=parseInt(_params.get('pid')||'0');
+let currentTipo=_params.get('tipo')||'sintetico'; // 'sintetico' | 'analitico'
+
+function applyTipoButtons(){
+  const btnS=document.getElementById('tipo-btn-sintetico');
+  const btnA=document.getElementById('tipo-btn-analitico');
+  btnS.style.background=currentTipo==='sintetico'?'rgba(255,255,255,.25)':'rgba(255,255,255,0)';
+  btnS.style.color=currentTipo==='sintetico'?'#fff':'rgba(255,255,255,.6)';
+  btnA.style.background=currentTipo==='analitico'?'rgba(255,255,255,.25)':'rgba(255,255,255,0)';
+  btnA.style.color=currentTipo==='analitico'?'#fff':'rgba(255,255,255,.6)';
+}
 
 function setTipo(tipo){
   currentTipo=tipo;
-  // Atualiza visual dos botões
-  const btnS=document.getElementById('tipo-btn-sintetico');
-  const btnA=document.getElementById('tipo-btn-analitico');
-  btnS.style.background=tipo==='sintetico'?'rgba(255,255,255,.25)':'rgba(255,255,255,0)';
-  btnS.style.color=tipo==='sintetico'?'#fff':'rgba(255,255,255,.6)';
-  btnA.style.background=tipo==='analitico'?'rgba(255,255,255,.25)':'rgba(255,255,255,0)';
-  btnA.style.color=tipo==='analitico'?'#fff':'rgba(255,255,255,.6)';
-  // Atualiza URL sem recarregar
+  applyTipoButtons();
   const u=new URL(location.href);
   u.searchParams.set('tipo',tipo);
   if(currentPid)u.searchParams.set('pid',currentPid);
@@ -171,10 +173,10 @@ function setTipo(tipo){
   if(currentPid) loadReport(currentPid);
 }
 
-function onProjChange(pid){
-  currentPid=parseInt(pid)||0;
+function onProjChange(val){
+  currentPid=parseInt(val)||0;
   const u=new URL(location.href);
-  if(currentPid)u.searchParams.set('pid',currentPid); else u.searchParams.delete('pid');
+  if(currentPid)u.searchParams.set('pid',currentPid);else u.searchParams.delete('pid');
   u.searchParams.set('tipo',currentTipo);
   history.replaceState(null,'',u);
   loadReport(currentPid);
@@ -186,9 +188,11 @@ async function init(){
   const{data:projs}=await sb.from('projects').select('id,name').order('name');
   const sel=document.getElementById('proj-sel');
   (projs||[]).forEach(p=>sel.innerHTML+=`<option value="${p.id}">${esc(p.name)}</option>`);
-  // Aplica tipo inicial
-  setTipo(currentTipo);
-  if(currentPid){sel.value=currentPid;loadReport(currentPid);}
+  applyTipoButtons();
+  if(currentPid){
+    sel.value=String(currentPid); // garante string para match com value do option
+    loadReport(currentPid);
+  }
 }
 
 async function loadReport(pid){
