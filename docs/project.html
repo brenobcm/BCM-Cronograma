@@ -113,6 +113,14 @@ html.dark .tb-btn,html.dark .zb:not(.on),html.dark .fb:not(.on){background:var(-
 .te-del{background:none;border:none;cursor:pointer;color:var(--txt3);font-size:14px;padding:0 4px}
 .te-del:hover{color:#dc2626}
 .te-form{display:grid;grid-template-columns:1fr 80px 1fr;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid var(--brd)}
+/* Dependências */
+.dep-item{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--brd);font-size:12px}
+.dep-item:last-child{border:none}
+.dep-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px;background:var(--accent);color:#fff;flex:none}
+.dep-del{background:none;border:none;cursor:pointer;color:var(--txt3);font-size:14px;padding:0 4px}
+.dep-del:hover{color:#dc2626}
+.dep-add{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--brd)}
+.dep-add select,.dep-add input{padding:5px 8px;border:1.5px solid var(--brd);border-radius:6px;font-size:12px;background:var(--sur);color:var(--txt)}
 
 @media print{
 @page{size:A4 landscape;margin:10mm}
@@ -214,6 +222,7 @@ nav,.tb,.overlay{display:none!important}
       <button class="mtab" onclick="tab('prog')">Progresso</button>
       <button class="mtab" onclick="tab('equipe')">👷 Equipe</button>
       <button class="mtab" onclick="tab('horas')">⏱ Horas</button>
+      <button class="mtab" onclick="tab('deps')">🔗 Deps</button>
       <button class="mtab" onclick="tab('log')">Histórico</button>
     </div>
     <div class="tab on" id="tab-info">
@@ -256,6 +265,26 @@ nav,.tb,.overlay{display:none!important}
         <input type="date" id="te-date" style="font-size:12px;padding:5px 7px;border:1.5px solid var(--brd);border-radius:6px;background:var(--sur);color:var(--txt)">
         <input id="te-desc" placeholder="Descrição (opcional)" style="font-size:12px;padding:5px 7px;border:1.5px solid var(--brd);border-radius:6px;background:var(--sur);color:var(--txt);grid-column:1/-1">
         <button onclick="addTimeEntry()" style="background:var(--accent);color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;grid-column:1/-1">+ Registrar Horas</button>
+      </div>
+    </div>
+
+    <!-- Aba Dependências (task_dependencies) -->
+    <div class="tab" id="tab-deps">
+      <div style="font-size:11px;color:var(--txt3);margin-bottom:8px">
+        <strong>FS</strong> = Fim→Início &nbsp;|&nbsp; <strong>SS</strong> = Início→Início &nbsp;|&nbsp; <strong>FF</strong> = Fim→Fim &nbsp;|&nbsp; <strong>SF</strong> = Início→Fim
+      </div>
+      <div id="dep-list" style="max-height:200px;overflow-y:auto"></div>
+      <div class="dep-add" id="dep-add-form">
+        <select id="dep-pred" style="flex:1;min-width:150px"><option value="">— Predecessora —</option></select>
+        <select id="dep-type" style="width:70px">
+          <option value="FS">FS</option>
+          <option value="SS">SS</option>
+          <option value="FF">FF</option>
+          <option value="SF">SF</option>
+        </select>
+        <input type="number" id="dep-lag" value="0" min="-30" max="60" style="width:65px" title="Lag (dias)">
+        <span style="font-size:11px;color:var(--txt3)">dias lag</span>
+        <button onclick="addDependency()" style="background:var(--accent);color:#fff;border:none;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">+ Adicionar</button>
       </div>
     </div>
 
@@ -364,7 +393,7 @@ const ROLE = localStorage.getItem('bcm_role') || 'tecnico';
 const CAN_EDIT = ROLE==='admin'||ROLE==='gestor';
 const CAN_PROG = ROLE!=='cliente';
 
-let tasks=[], cats=[], collapsed=new Set(), activeFilter=null, zoom=5, allExp=false, modId=null;
+let tasks=[], cats=[], deps=[], collapsed=new Set(), activeFilter=null, zoom=5, allExp=false, modId=null;
 const TODAY=new Date(); TODAY.setHours(0,0,0,0);
 const MONTHS=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 const COLORS=['#3b82f6','#8b5cf6','#10b981','#f59e0b','#ef4444','#06b6d4','#ec4899','#84cc16','#f97316','#6366f1'];
@@ -394,6 +423,13 @@ async function logout() { await sb.auth.signOut(); localStorage.clear(); window.
 async function loadTasks() {
   const { data } = await sb.from('tasks').select('*').eq('project_id',PID).order('order_idx').order('id');
   tasks = data || [];
+  const taskIds = tasks.map(t=>t.id);
+  if(taskIds.length){
+    const { data: depData } = await sb.from('task_dependencies')
+      .select('task_id,predecessor_id,type,lag_days')
+      .in('task_id', taskIds);
+    deps = depData || [];
+  } else { deps = []; }
   cats = [...new Set(tasks.map(t=>t.category))];
   renderFilters();
   renderKPI();
@@ -502,6 +538,9 @@ function draw(){
   const grouped={};
   vt.forEach(t=>{if(!grouped[t.category])grouped[t.category]=[];grouped[t.category].push(t);});
   let lp='',cv='',y=0;
+  // map task_id → {x, xEnd, midY} para setas
+  const barPos={};
+
   // gridlines
   const mc=new Date(PS);
   while(mc<=PE){cv+=`<div class="gridline" style="left:${xOf(mc,PS)}px;height:100%"></div>`;mc.setMonth(mc.getMonth()+1);mc.setDate(1);}
@@ -519,17 +558,47 @@ function draw(){
       ct.forEach(t=>{
         const st=taskSt(t);
         const sc={ok:'st-ok',atrs:'st-atrs',and:'st-and',nao:'st-nao'}[st];
-        lp+=`<div class="task-row"><span class="status-dot ${sc}"></span><span class="task-name" title="${esc(t.name)}">${esc(t.name)}</span><span class="task-dates">${fd(t.start_date)}–${fd(t.end_date)}</span><span class="task-pct">${t.progress}%</span>${CAN_PROG?`<button class="task-edit-btn" onclick="openTask(${t.id})">✏️</button>`:''}</div>`;
+        // Indicador de dependência na lista esquerda
+        const hasDep=deps.some(d=>d.task_id===t.id||d.predecessor_id===t.id);
+        lp+=`<div class="task-row"><span class="status-dot ${sc}"></span><span class="task-name" title="${esc(t.name)}">${esc(t.name)}</span><span class="task-dates">${fd(t.start_date)}–${fd(t.end_date)}</span><span class="task-pct">${t.progress}%</span>${hasDep?'<span style="font-size:10px;opacity:.5" title="Tem dependências">🔗</span>':''}${CAN_PROG?`<button class="task-edit-btn" onclick="openTask(${t.id})">✏️</button>`:''}</div>`;
         const bx=xOf(t.start_date,PS);
         const bw=Math.max(dif(pd(t.start_date),pd(t.end_date))*zoom,4);
+        barPos[t.id]={x:bx, xEnd:bx+bw, midY:y+ROW/2};
         cv+=`<div class="g-row" style="top:${y}px;width:${W}px"><div class="bar cb${ci}" style="left:${bx}px;width:${bw}px" onclick="openTask(${t.id})"><div class="bar-fill cc${ci}" style="width:${Math.round(t.progress/100*bw)}px;opacity:.85"></div><div class="bar-lbl">${t.progress>0?t.progress+'% — ':''}${esc(t.name)}</div></div></div>`;
         y+=ROW;
       });
     }
   });
+
   const canvas=document.getElementById('canvas');
   canvas.style.height=y+'px';canvas.style.width=W+'px';
   canvas.innerHTML=cv;
+
+  // ── Desenha setas SVG de dependência ────────────────────────
+  if(deps.length){
+    let svgLines='';
+    deps.forEach(d=>{
+      const from=barPos[d.predecessor_id];
+      const to=barPos[d.task_id];
+      if(!from||!to)return;
+      // FS: sai do fim da predecessora, chega no início da sucessora
+      let x1=from.xEnd, y1=from.midY, x2=to.x, y2=to.midY;
+      if(d.type==='SS'){x1=from.x;}
+      if(d.type==='FF'){x1=from.xEnd;x2=to.xEnd;}
+      if(d.type==='SF'){x1=from.x;x2=to.xEnd;}
+      const dx=x2-x1, color=d.type==='FS'?'rgba(99,102,241,.55)':'rgba(245,158,11,.55)';
+      const mid=x1+dx*0.5;
+      // Polyline: sai → desce/sobe → chega
+      const pts=`${x1},${y1} ${mid},${y1} ${mid},${y2} ${x2},${y2}`;
+      svgLines+=`<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" stroke-dasharray="4 2" marker-end="url(#arr)"/>`;
+    });
+    const svg=`<svg style="position:absolute;inset:0;pointer-events:none;overflow:visible;z-index:4" width="${W}" height="${y}">
+      <defs><marker id="arr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="rgba(99,102,241,.7)"/></marker></defs>
+      ${svgLines}
+    </svg>`;
+    canvas.insertAdjacentHTML('beforeend',svg);
+  }
+
   document.getElementById('lp-body').innerHTML=lp;
   // scroll sync
   const lb=document.getElementById('lp-body'),tb=document.getElementById('tl-body');
@@ -549,7 +618,7 @@ function toggleAll(){if(allExp||collapsed.size>0){collapsed.clear();allExp=true;
 function goToday(){const{PS}=getRange();const x=xOf(TODAY,PS);document.getElementById('tl-body').scrollLeft=Math.max(0,x-300);}
 
 // ─── Task Modal ─────────────────────────────────────────────
-const TAB_NAMES=['info','prog','equipe','horas','log'];
+const TAB_NAMES=['info','prog','equipe','horas','deps','log'];
 function tab(t){
   TAB_NAMES.forEach((n,i)=>{
     document.querySelectorAll('.mtab')[i].classList.toggle('on',n===t);
@@ -557,6 +626,7 @@ function tab(t){
   });
   if(t==='equipe') loadAllocation(modId);
   if(t==='horas') loadTimeEntries(modId);
+  if(t==='deps') loadDependencies(modId);
 }
 
 async function openTask(tid){
@@ -576,9 +646,10 @@ async function openTask(tid){
   document.getElementById('pslider').disabled=!CAN_PROG;
   document.getElementById('mod-save').style.display=CAN_PROG?'':'none';
   document.getElementById('mod-del').style.display=CAN_EDIT?'':'none';
-  // form de alocação e horas — visível por gestor+
+  // form de alocação, horas e deps — visível por gestor+
   document.getElementById('alloc-add-form').style.display=CAN_EDIT?'flex':'none';
   document.getElementById('te-add-form').style.display=CAN_PROG?'grid':'none';
+  document.getElementById('dep-add-form').style.display=CAN_EDIT?'flex':'none';
   // pré-carrega data atual no campo de horas
   document.getElementById('te-date').value=new Date().toISOString().split('T')[0];
   tab('info');
@@ -713,6 +784,85 @@ async function removeTimeEntry(id){
   if(!confirm('Excluir este registro?'))return;
   await sb.from('time_entries').delete().eq('id',id);
   loadTimeEntries(modId);
+}
+
+// ─── Dependências (task_dependencies) ────────────────────────
+const DEP_LABELS={FS:'Fim → Início',SS:'Início → Início',FF:'Fim → Fim',SF:'Início → Fim'};
+
+async function loadDependencies(tid){
+  if(!tid)return;
+  // Busca predecessoras desta tarefa
+  const{data:preds}=await sb.from('task_dependencies')
+    .select('predecessor_id,type,lag_days')
+    .eq('task_id',tid);
+  // Busca sucessoras desta tarefa
+  const{data:succs}=await sb.from('task_dependencies')
+    .select('task_id,type,lag_days')
+    .eq('predecessor_id',tid);
+
+  const predIds=(preds||[]).map(d=>d.predecessor_id);
+  const succIds=(succs||[]).map(d=>d.task_id);
+
+  // Mapeia nomes
+  const nameOf=id=>{ const t=tasks.find(x=>x.id===id); return t?t.name:'(id '+id+')'; };
+  const lagStr=lag=>lag>0?` +${lag}d`:lag<0?` ${lag}d`:'';
+
+  let html='';
+  if((preds||[]).length){
+    html+=`<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Predecessoras</div>`;
+    html+=(preds||[]).map(d=>`
+      <div class="dep-item">
+        <span class="dep-badge">${d.type}</span>
+        <span style="flex:1;color:var(--txt)">${esc(nameOf(d.predecessor_id))}</span>
+        ${d.lag_days?`<span style="font-size:11px;color:var(--txt3)">${lagStr(d.lag_days)}</span>`:''}
+        ${CAN_EDIT?`<button class="dep-del" onclick="removeDependency(${tid},${d.predecessor_id},'pred')" title="Remover">✕</button>`:''}
+      </div>`).join('');
+  }
+  if((succs||[]).length){
+    html+=`<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.05em;margin:10px 0 4px">Sucessoras</div>`;
+    html+=(succs||[]).map(d=>`
+      <div class="dep-item">
+        <span class="dep-badge" style="background:#8b5cf6">${d.type}</span>
+        <span style="flex:1;color:var(--txt)">${esc(nameOf(d.task_id))}</span>
+        ${d.lag_days?`<span style="font-size:11px;color:var(--txt3)">${lagStr(d.lag_days)}</span>`:''}
+      </div>`).join('');
+  }
+  if(!html) html='<div style="color:var(--txt3);font-size:13px;padding:12px 0">Nenhuma dependência cadastrada.</div>';
+  document.getElementById('dep-list').innerHTML=html;
+
+  // Atualiza select de predecessoras (exclui a própria tarefa e já predecessoras)
+  if(CAN_EDIT){
+    const excl=new Set([tid,...predIds,...succIds]);
+    const sel=document.getElementById('dep-pred');
+    sel.innerHTML='<option value="">— Predecessora —</option>'+
+      tasks.filter(t=>!excl.has(t.id))
+        .map(t=>`<option value="${t.id}">${esc(t.category+' › '+t.name)}</option>`).join('');
+  }
+}
+
+async function addDependency(){
+  if(!modId)return;
+  const predId=parseInt(document.getElementById('dep-pred').value);
+  if(!predId){alert('Selecione a tarefa predecessora');return;}
+  const type=document.getElementById('dep-type').value;
+  const lag=parseInt(document.getElementById('dep-lag').value)||0;
+  const{error}=await sb.from('task_dependencies').insert({
+    task_id:modId, predecessor_id:predId, type, lag_days:lag
+  });
+  if(error){alert('Erro: '+error.message);return;}
+  document.getElementById('dep-pred').value='';
+  document.getElementById('dep-lag').value='0';
+  loadDependencies(modId);
+  // Redesenha barras para atualizar indicadores visuais
+  draw();
+}
+
+async function removeDependency(taskId, predId){
+  if(!confirm('Remover esta dependência?'))return;
+  await sb.from('task_dependencies').delete()
+    .eq('task_id',taskId).eq('predecessor_id',predId);
+  loadDependencies(modId);
+  draw();
 }
 
 function closeTask(){document.getElementById('ov-task').classList.remove('open');modId=null;}
