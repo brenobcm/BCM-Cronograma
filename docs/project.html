@@ -638,12 +638,18 @@ function draw(){
 
   function renderNode(t,level,ci){
     const node=treeById[t.id]; if(!node)return;
-    const hasChildren=node._children.length>0;
+    const childCount=node._children.length;
+    const hasChildren=childCount>0;
+    const isParent=hasChildren||t.is_summary;   // pai = tem filhos OU marcada como resumo
     const isColl=collapsed.has(t.id);
     const st=taskSt(t);
     const sc={ok:'st-ok',atrs:'st-atrs',and:'st-and',nao:'st-nao'}[st];
     const hasDep=deps.some(d=>d.task_id===t.id||d.predecessor_id===t.id);
     const baseIndent=level===0?22:22+level*14;
+
+    // Datas exibidas: para um pai, mostra o range do conjunto de filhos
+    let dispS=t.start_date, dispE=t.end_date;
+    if(isParent){const rng=nodeRange(node);dispS=rng.s;dispE=rng.e;}
 
     // Left panel row
     const caretEl=hasChildren
@@ -651,7 +657,7 @@ function draw(){
       :`<span class="task-caret-ph"></span>`;
     lp+=`<div class="task-row" data-task-id="${t.id}" data-parent="${t.parent_task_id||''}" data-cat="${esc(t.category)}" draggable="${CAN_EDIT}" style="padding-left:${baseIndent}px">`;
     if(CAN_EDIT) lp+=`<span class="drag-handle" title="Arrastar para reordenar">⠿</span>`;
-    lp+=`${caretEl}<span class="status-dot ${sc}"></span><span class="task-name" title="${esc(t.name)}">${esc(t.name)}</span><span class="task-dates">${fd(t.start_date)}–${fd(t.end_date)}</span><span class="task-pct">${t.progress}%</span>`;
+    lp+=`${caretEl}<span class="status-dot ${sc}"></span><span class="task-name" title="${esc(t.name)}" style="${isParent?'font-weight:700':''}">${esc(t.name)}</span><span class="task-dates">${fd(dispS)}–${fd(dispE)}</span><span class="task-pct">${t.progress}%</span>`;
     if(hasDep) lp+=`<span style="font-size:10px;opacity:.5" title="Tem dependências">🔗</span>`;
     if(CAN_EDIT) lp+=`<button class="indent-btn" onclick="outdentTask(${t.id})" title="◀ Recuar — promover um nível (vira irmã do pai)">◀</button>`;
     if(CAN_EDIT) lp+=`<button class="indent-btn" onclick="indentTask(${t.id})" title="▶ Avançar — virar sub-tarefa da de cima">▶</button>`;
@@ -661,7 +667,7 @@ function draw(){
 
     // Gantt bar
     let bx,bw;
-    if(hasChildren){
+    if(isParent){
       const rng=nodeRange(node);
       bx=xOf(rng.s,PS); bw=Math.max((dif(rng.s,rng.e)+1)*zoom,6);
     } else {
@@ -677,7 +683,7 @@ function draw(){
       baseBar=`<div class="bar-baseline" style="left:${bbx}px;width:${bbw}px" title="Baseline: ${bt.start_date} → ${bt.end_date} (${bt.progress}%)"></div>`;
     }
 
-    if(hasChildren){
+    if(isParent){
       // Barra sumário (estilo MS Project)
       const col=COLORS[ci];
       const fillW=Math.round(t.progress/100*bw);
@@ -773,24 +779,47 @@ async function indentTask(id){
   await loadTasks();
 }
 
-// Recuar ◀ : tarefa sobe um nível (passa a ser irmã do seu pai atual)
+// Recuar ◀ :
+//  • Se a tarefa estiver aninhada (tem pai): promove um nível (vira irmã do pai).
+//  • Se estiver no nível principal: vira PAI (resumo) e adota a próxima tarefa abaixo
+//    como filha. Mesmo sem tarefa abaixo, fica marcada como pai (negrito, barra resumo).
 async function outdentTask(id){
   const t=tasks.find(x=>x.id===id); if(!t)return;
-  if(!t.parent_task_id){alert('Tarefa já está no nível principal.');return;}
-  const parent=tasks.find(x=>x.id===t.parent_task_id);
-  const newParent=parent?(parent.parent_task_id||null):null;
-  // Novo grupo de irmãos = filhos de newParent; insere T logo após o antigo pai
-  const siblings=tasks
-    .filter(x=>x.category===t.category&&(x.parent_task_id||null)===newParent&&x.id!==id)
+
+  if(t.parent_task_id){
+    // ── Promove um nível ──
+    const parent=tasks.find(x=>x.id===t.parent_task_id);
+    const newParent=parent?(parent.parent_task_id||null):null;
+    const siblings=tasks
+      .filter(x=>x.category===t.category&&(x.parent_task_id||null)===newParent&&x.id!==id)
+      .sort((a,b)=>a.order_idx-b.order_idx||(a.id-b.id));
+    const pIdx=parent?siblings.findIndex(x=>x.id===parent.id):-1;
+    if(pIdx===-1)siblings.push(t);
+    else siblings.splice(pIdx+1,0,t);
+    await Promise.all(siblings.map((c,i)=>{
+      const patch={order_idx:(i+1)*100};
+      if(c.id===id)patch.parent_task_id=newParent;
+      return sb.from('tasks').update(patch).eq('id',c.id);
+    }));
+    await loadTasks();
+    return;
+  }
+
+  // ── Nível principal → vira PAI/resumo e adota a próxima tarefa abaixo ──
+  const roots=tasks
+    .filter(x=>x.category===t.category&&!x.parent_task_id)
     .sort((a,b)=>a.order_idx-b.order_idx||(a.id-b.id));
-  const pIdx=parent?siblings.findIndex(x=>x.id===parent.id):-1;
-  if(pIdx===-1)siblings.push(t);
-  else siblings.splice(pIdx+1,0,t);
-  await Promise.all(siblings.map((c,i)=>{
-    const patch={order_idx:(i+1)*100};
-    if(c.id===id)patch.parent_task_id=newParent;
-    return sb.from('tasks').update(patch).eq('id',c.id);
-  }));
+  const idx=roots.findIndex(x=>x.id===id);
+  const below=roots[idx+1]; // próxima tarefa raiz abaixo (se houver)
+
+  const ops=[ sb.from('tasks').update({is_summary:true}).eq('id',id) ];
+  if(below){
+    ops.push( sb.from('tasks').update({parent_task_id:t.id}).eq('id',below.id) );
+  }
+  const results=await Promise.all(ops);
+  const err=results.find(r=>r.error);
+  if(err){alert('Erro: '+err.error.message+'\\n\\nVocê executou a migração migration_task_summary.sql no Supabase?');return;}
+  collapsed.delete(id); // garante que fique expandida
   await loadTasks();
 }
 
