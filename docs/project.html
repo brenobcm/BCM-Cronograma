@@ -754,16 +754,70 @@ function draw(){
 function toggleTask(id){if(collapsed.has(id))collapsed.delete(id);else collapsed.add(id);draw();}
 
 // ─── Recuar / Avançar (indent/outdent estilo MS Project) ─────
-// Avançar ▶ : tarefa vira sub-tarefa (filha) da tarefa imediatamente acima no mesmo nível
+
+// Ordem visível das tarefas (igual ao que é renderizado: por categoria + árvore)
+function buildVisibleOrder(){
+  const vt=visibleTasks();
+  const grouped={};
+  vt.forEach(t=>{(grouped[t.category]=grouped[t.category]||[]).push(t);});
+  const tree=buildTaskTree(tasks);
+  const out=[];
+  Object.entries(grouped).forEach(([cat,ct])=>{
+    const catIds=new Set(ct.map(t=>t.id));
+    const roots=ct.filter(t=>!t.parent_task_id||!catIds.has(t.parent_task_id))
+      .sort((a,b)=>a.order_idx-b.order_idx||(a.id-b.id));
+    roots.forEach(function walk(t){
+      out.push(t);
+      const node=tree[t.id];
+      if(node&&!collapsed.has(t.id)){
+        node._children.slice()
+          .sort((a,b)=>a.order_idx-b.order_idx||(a.id-b.id))
+          .forEach(walk);
+      }
+    });
+  });
+  return out;
+}
+
+// candId está dentro da subárvore de rootId?
+function isDescendant(candId,rootId){
+  let c=tasks.find(x=>x.id===candId);
+  while(c&&c.parent_task_id){
+    if(c.parent_task_id===rootId)return true;
+    c=tasks.find(x=>x.id===c.parent_task_id);
+  }
+  return false;
+}
+
+// Avançar ▶ : a tarefa de CIMA vira pai desta tarefa.
+//  • Regra principal: vira filha da tarefa-irmã imediatamente acima (mesmo nível) →
+//    isso constrói grupos "achatados" sob um mesmo pai ao avançar várias seguidas.
+//  • Se não houver irmã acima, usa a tarefa imediatamente acima na lista (qualquer nível).
+//  • Funciona em qualquer posição; se não houver nada acima, não faz nada (sem alerta).
 async function indentTask(id){
   const t=tasks.find(x=>x.id===id); if(!t)return;
   const parent=t.parent_task_id||null;
+
+  // 1) irmã imediatamente acima (mesmo pai)
   const siblings=tasks
     .filter(x=>x.category===t.category&&(x.parent_task_id||null)===parent)
     .sort((a,b)=>a.order_idx-b.order_idx||(a.id-b.id));
-  const idx=siblings.findIndex(x=>x.id===id);
-  if(idx<=0){alert('Não há tarefa acima no mesmo nível para se tornar pai.');return;}
-  const newParent=siblings[idx-1];
+  const sidx=siblings.findIndex(x=>x.id===id);
+  let newParent=sidx>0?siblings[sidx-1]:null;
+
+  // 2) fallback: tarefa imediatamente acima na lista visível (não pode ser descendente de T)
+  if(!newParent){
+    const vis=buildVisibleOrder();
+    const vidx=vis.findIndex(x=>x.id===id);
+    for(let i=vidx-1;i>=0;i--){
+      const cand=vis[i];
+      if(cand.category!==t.category)break;          // não atravessa categorias
+      if(cand.id===id||isDescendant(cand.id,id))continue; // não pode ser filho do próprio descendente
+      newParent=cand; break;
+    }
+  }
+  if(!newParent)return; // nada acima — silencioso
+
   // T entra como último filho de newParent
   const children=tasks
     .filter(x=>x.category===t.category&&(x.parent_task_id||null)===newParent.id&&x.id!==id)
@@ -774,8 +828,7 @@ async function indentTask(id){
     if(c.id===id)patch.parent_task_id=newParent.id;
     return sb.from('tasks').update(patch).eq('id',c.id);
   }));
-  // expande o novo pai para mostrar a tarefa recém-aninhada
-  collapsed.delete(newParent.id);
+  collapsed.delete(newParent.id); // expande o novo pai
   await loadTasks();
 }
 
