@@ -130,7 +130,18 @@ html.dark .bar-baseline{background:rgba(71,85,105,.7);border-color:rgba(100,116,
 .drag-handle:hover{opacity:.9}
 .task-row.drag-over-top{box-shadow:inset 0 2px 0 var(--accent)}
 .task-row.drag-over-bot{box-shadow:inset 0 -2px 0 var(--accent)}
-.task-row.dragging{opacity:.35}
+.cat-row.drag-over-top{box-shadow:inset 0 2px 0 var(--accent)}
+.cat-row.drag-over-bot{box-shadow:inset 0 -2px 0 var(--accent)}
+.task-row.dragging,.cat-row.dragging{opacity:.35}
+/* Resize handle */
+#lp-resize{width:5px;flex:none;cursor:col-resize;background:var(--brd);z-index:20;transition:background .15s}
+#lp-resize:hover,#lp-resize.active{background:var(--accent)}
+/* Category action buttons */
+.cat-actions{display:flex;gap:1px;margin-left:6px;opacity:0;transition:opacity .15s;flex:none}
+.cat-row:hover .cat-actions{opacity:1}
+.cat-act{background:none;border:none;cursor:pointer;padding:2px 5px;border-radius:4px;color:var(--txt3);font-size:12px;line-height:1}
+.cat-act:hover{background:rgba(0,0,0,.08);color:var(--accent)}
+.cat-act.del:hover{color:#dc2626}
 /* Task caret (expand/collapse parent tasks) */
 .task-caret{font-size:10px;transition:transform .18s;color:var(--txt3);flex:none;width:14px;text-align:center;cursor:pointer}
 .task-caret.closed{transform:rotate(-90deg)}
@@ -229,6 +240,7 @@ nav,.tb,.overlay{display:none!important}
     <div class="lp-hdr"><span style="flex:1">Tarefa</span><span style="margin-right:8px">Início/Fim</span><span style="min-width:32px;text-align:right">%</span></div>
     <div class="lp-body" id="lp-body"></div>
   </div>
+  <div id="lp-resize" title="Arrastar para redimensionar"></div>
   <div class="right-panel">
     <div class="tl-hdr" id="tl-hdr"></div>
     <div class="tl-body" id="tl-body"><div class="tl-canvas" id="canvas"></div></div>
@@ -638,7 +650,8 @@ function draw(){
     if(CAN_EDIT) lp+=`<span class="drag-handle" title="Arrastar para reordenar">⠿</span>`;
     lp+=`${caretEl}<span class="status-dot ${sc}"></span><span class="task-name" title="${esc(t.name)}">${esc(t.name)}</span><span class="task-dates">${fd(t.start_date)}–${fd(t.end_date)}</span><span class="task-pct">${t.progress}%</span>`;
     if(hasDep) lp+=`<span style="font-size:10px;opacity:.5" title="Tem dependências">🔗</span>`;
-    if(CAN_PROG) lp+=`<button class="task-edit-btn" onclick="openTask(${t.id})">✏️</button>`;
+    if(CAN_PROG) lp+=`<button class="task-edit-btn" style="opacity:1" onclick="openTask(${t.id})" title="Editar">✏️</button>`;
+    if(CAN_EDIT) lp+=`<button class="task-edit-btn" style="opacity:1;color:#dc2626" onclick="delTaskById(${t.id})" title="Excluir">🗑</button>`;
     lp+='</div>';
 
     // Gantt bar
@@ -682,7 +695,8 @@ function draw(){
     // Raízes: tarefas sem pai OU cujo pai não está nesta categoria
     const catIds=new Set(ct.map(t=>t.id));
     const roots=ct.filter(t=>!t.parent_task_id||!catIds.has(t.parent_task_id));
-    lp+=`<div class="cat-row${isC?' collapsed':''}" data-cat="${cat.replace(/"/g,'&quot;')}" draggable="${CAN_EDIT}">${CAN_EDIT?'<span class="drag-handle" style="opacity:.5" title="Arrastar categoria">⠿</span>':''}<span class="caret">▾</span><span class="cat-name">${esc(cat)}</span><span class="cat-pct" style="color:${col}">${avg}%</span></div>`;
+    const catActBtns=CAN_EDIT?`<span class="cat-actions" onclick="event.stopPropagation()"><button class="cat-act" onclick="editCat(this.closest('.cat-row').dataset.cat)" title="Renomear categoria">✏️</button><button class="cat-act del" onclick="delCat(this.closest('.cat-row').dataset.cat)" title="Excluir categoria">🗑</button></span>`:'';
+    lp+=`<div class="cat-row${isC?' collapsed':''}" data-cat="${cat.replace(/"/g,'&quot;')}" draggable="${CAN_EDIT}">${CAN_EDIT?'<span class="drag-handle" style="opacity:.5" title="Arrastar categoria">⠿</span>':''}<span class="caret">▾</span><span class="cat-name">${esc(cat)}</span><span class="cat-pct" style="color:${col}">${avg}%</span>${catActBtns}</div>`;
     cv+=`<div class="g-row g-cat-row" style="top:${y}px;width:${W}px"></div>`;
     y+=ROW;
     if(!isC) roots.forEach(t=>renderNode(t,0,ci));
@@ -727,6 +741,42 @@ function draw(){
 }
 
 function toggleTask(id){if(collapsed.has(id))collapsed.delete(id);else collapsed.add(id);draw();}
+
+// ─── Editar / Excluir categoria ──────────────────────────────
+async function editCat(cat){
+  const newName=prompt('Novo nome para a categoria:',cat);
+  if(!newName||newName.trim()===cat)return;
+  const nm=newName.trim().toUpperCase();
+  const ids=tasks.filter(t=>t.category===cat).map(t=>t.id);
+  if(!ids.length)return;
+  await Promise.all(ids.map(id=>sb.from('tasks').update({category:nm}).eq('id',id)));
+  await loadTasks();
+}
+
+async function delCat(cat){
+  const ct=tasks.filter(t=>t.category===cat);
+  if(!ct.length)return;
+  if(!confirm(`Excluir categoria "${cat}" com todas as ${ct.length} tarefa(s)? Esta ação não pode ser desfeita.`))return;
+  // Deleta do mais fundo para o topo para evitar conflito de FK
+  const sorted=[...ct].sort((a,b)=>(b.parent_task_id||0)-(a.parent_task_id||0));
+  for(const t of sorted) await sb.from('tasks').delete().eq('id',t.id);
+  await loadTasks();
+}
+
+// ─── Excluir tarefa diretamente ──────────────────────────────
+async function delTaskById(id){
+  const treeById=buildTaskTree(tasks);
+  const node=treeById[id]; if(!node)return;
+  const all=flatDesc(node);
+  const msg=all.length>1
+    ?`Excluir "${node.name}" e ${all.length-1} sub-tarefa(s)?`
+    :`Excluir "${node.name}"?`;
+  if(!confirm(msg))return;
+  // Deleta filhos antes dos pais
+  const sorted=[...all].reverse();
+  for(const t of sorted) await sb.from('tasks').delete().eq('id',t.id);
+  await loadTasks();
+}
 
 // ─── Drag & Drop ─────────────────────────────────────────────
 let _dragId=null, _dragCat=null;
@@ -1442,6 +1492,30 @@ function printGantt(){
     draw();
   },400);
 }
+
+// ─── Resize painel esquerdo ───────────────────────────────────
+(function(){
+  const handle=document.getElementById('lp-resize');
+  const root=document.documentElement;
+  let startX=0,startW=0;
+  handle.onmousedown=e=>{
+    startX=e.clientX;
+    startW=parseInt(getComputedStyle(root).getPropertyValue('--lp'))||368;
+    handle.classList.add('active');
+    document.body.style.userSelect='none';
+    document.onmousemove=mv=>{
+      const w=Math.max(180,Math.min(700,startW+(mv.clientX-startX)));
+      root.style.setProperty('--lp',w+'px');
+    };
+    document.onmouseup=()=>{
+      handle.classList.remove('active');
+      document.body.style.userSelect='';
+      document.onmousemove=null;
+      document.onmouseup=null;
+    };
+    e.preventDefault();
+  };
+})();
 
 init();
 </script>
