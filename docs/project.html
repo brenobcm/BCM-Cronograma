@@ -125,6 +125,21 @@ html.dark .bar-baseline{background:rgba(71,85,105,.7);border-color:rgba(100,116,
 .dep-add{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--brd)}
 .dep-add select,.dep-add input{padding:5px 8px;border:1.5px solid var(--brd);border-radius:6px;font-size:12px;background:var(--sur);color:var(--txt)}
 
+/* Drag-and-drop */
+.drag-handle{cursor:grab;color:var(--txt3);font-size:16px;padding:0 3px;flex:none;opacity:.35;user-select:none;line-height:1}
+.drag-handle:hover{opacity:.9}
+.task-row.drag-over-top{box-shadow:inset 0 2px 0 var(--accent)}
+.task-row.drag-over-bot{box-shadow:inset 0 -2px 0 var(--accent)}
+.task-row.dragging{opacity:.35}
+/* Task caret (expand/collapse parent tasks) */
+.task-caret{font-size:10px;transition:transform .18s;color:var(--txt3);flex:none;width:14px;text-align:center;cursor:pointer}
+.task-caret.closed{transform:rotate(-90deg)}
+.task-caret-ph{width:14px;flex:none}
+/* Summary bar (parent tasks) */
+.bar-parent{height:10px;top:13px;border-radius:3px;position:absolute;cursor:pointer}
+.bar-parent::before,.bar-parent::after{content:'';position:absolute;bottom:-5px;width:8px;height:8px;border-radius:50%}
+.bar-parent::before{left:0}
+.bar-parent::after{right:0}
 @media print{
 @page{size:A4 landscape;margin:10mm}
 body{display:block!important;height:auto!important;overflow:visible!important;background:#fff!important}
@@ -242,6 +257,7 @@ nav,.tb,.overlay{display:none!important}
         <div class="field"><label>Categoria</label><input id="t-cat"></div>
         <div class="field"><label>Responsável</label><input id="t-resp"></div>
       </div>
+      <div class="field" id="t-parent-field"><label>Tarefa Pai <span style="font-weight:400;color:var(--txt3)">(opcional)</span></label><select id="t-parent"><option value="">— Sem pai (raiz) —</option></select></div>
     </div>
     <div class="tab" id="tab-prog">
       <div class="field">
@@ -334,6 +350,7 @@ nav,.tb,.overlay{display:none!important}
         <div class="field"><label>Término *</label><input type="date" id="nt-end"></div>
       </div>
       <div class="field"><label>Responsável</label><input id="nt-resp"></div>
+      <div class="field"><label>Tarefa Pai <span style="font-weight:400;color:var(--txt3)">(opcional — cria sub-tarefa)</span></label><select id="nt-parent"><option value="">— Sem pai (raiz) —</option></select></div>
     </div>
 
     <!-- Pane: Tipo de Painel -->
@@ -563,95 +580,219 @@ function renderTLH(){
   document.getElementById('tl-hdr').innerHTML=`<div class="tl-months" style="min-width:${W}px">${mHTML}</div><div class="tl-weeks" style="min-width:${W}px">${wHTML}</div>`;
 }
 
+// ─── Árvore de tarefas ───────────────────────────────────────
+function buildTaskTree(list){
+  const byId={};
+  list.forEach(t=>{byId[t.id]={...t,_children:[]};});
+  list.forEach(t=>{
+    if(t.parent_task_id&&byId[t.parent_task_id])
+      byId[t.parent_task_id]._children.push(byId[t.id]);
+  });
+  return byId;
+}
+
+// Retorna range de datas cobrindo todos os descendentes
+function nodeRange(node){
+  if(!node._children.length) return{s:pd(node.start_date),e:pd(node.end_date)};
+  const all=[node,...node._children.flatMap(c=>flatDesc(c))];
+  return{
+    s:new Date(Math.min(...all.map(t=>pd(t.start_date)))),
+    e:new Date(Math.max(...all.map(t=>pd(t.end_date))))
+  };
+}
+function flatDesc(node){return[node,...(node._children||[]).flatMap(c=>flatDesc(c))];}
+
 function draw(){
   const vt=visibleTasks();
   const{PS,PE}=getRange();
   const W=dif(PS,PE)*zoom;
   const ROW=36;
+
+  // Agrupa por categoria (mantendo ordem original de cats)
   const grouped={};
   vt.forEach(t=>{if(!grouped[t.category])grouped[t.category]=[];grouped[t.category].push(t);});
-  let lp='',cv='',y=0;
-  // map task_id → {x, xEnd, midY} para setas
-  const barPos={};
 
-  // gridlines
+  const treeById=buildTaskTree(tasks); // constrói sobre TODAS as tasks para ter relações corretas
+  const barPos={};
+  let lp='',cv='',y=0;
+
+  // gridlines + linha de hoje
   const mc=new Date(PS);
   while(mc<=PE){cv+=`<div class="gridline" style="left:${xOf(mc,PS)}px;height:100%"></div>`;mc.setMonth(mc.getMonth()+1);mc.setDate(1);}
   cv+=`<div class="today-line" style="left:${xOf(TODAY,PS)}px"></div>`;
+
+  function renderNode(t,level,ci){
+    const node=treeById[t.id]; if(!node)return;
+    const hasChildren=node._children.length>0;
+    const isColl=collapsed.has(t.id);
+    const st=taskSt(t);
+    const sc={ok:'st-ok',atrs:'st-atrs',and:'st-and',nao:'st-nao'}[st];
+    const hasDep=deps.some(d=>d.task_id===t.id||d.predecessor_id===t.id);
+    const baseIndent=level===0?22:22+level*14;
+
+    // Left panel row
+    const caretEl=hasChildren
+      ?`<span class="task-caret${isColl?' closed':''}" data-tid="${t.id}">▾</span>`
+      :`<span class="task-caret-ph"></span>`;
+    lp+=`<div class="task-row" data-task-id="${t.id}" data-parent="${t.parent_task_id||''}" data-cat="${esc(t.category)}" draggable="${CAN_EDIT}" style="padding-left:${baseIndent}px">`;
+    if(CAN_EDIT) lp+=`<span class="drag-handle" title="Arrastar para reordenar">⠿</span>`;
+    lp+=`${caretEl}<span class="status-dot ${sc}"></span><span class="task-name" title="${esc(t.name)}">${esc(t.name)}</span><span class="task-dates">${fd(t.start_date)}–${fd(t.end_date)}</span><span class="task-pct">${t.progress}%</span>`;
+    if(hasDep) lp+=`<span style="font-size:10px;opacity:.5" title="Tem dependências">🔗</span>`;
+    if(CAN_PROG) lp+=`<button class="task-edit-btn" onclick="openTask(${t.id})">✏️</button>`;
+    lp+='</div>';
+
+    // Gantt bar
+    let bx,bw;
+    if(hasChildren){
+      const rng=nodeRange(node);
+      bx=xOf(rng.s,PS); bw=Math.max((dif(rng.s,rng.e)+1)*zoom,6);
+    } else {
+      bx=xOf(t.start_date,PS); bw=Math.max(dif(pd(t.start_date),pd(t.end_date))*zoom,4);
+    }
+    barPos[t.id]={x:bx,xEnd:bx+bw,midY:y+ROW/2};
+
+    let baseBar='';
+    if(showBaseline&&activeBaseline?.map[t.id]){
+      const bt=activeBaseline.map[t.id];
+      const bbx=xOf(bt.start_date,PS);
+      const bbw=Math.max(dif(pd(bt.start_date),pd(bt.end_date))*zoom,4);
+      baseBar=`<div class="bar-baseline" style="left:${bbx}px;width:${bbw}px" title="Baseline: ${bt.start_date} → ${bt.end_date} (${bt.progress}%)"></div>`;
+    }
+
+    if(hasChildren){
+      // Barra sumário (estilo MS Project)
+      const col=COLORS[ci];
+      const fillW=Math.round(t.progress/100*bw);
+      cv+=`<div class="g-row" style="top:${y}px;width:${W}px">${baseBar}<div class="bar-parent cc${ci}" style="left:${bx}px;width:${bw}px;background:${col}" onclick="openTask(${t.id})"><div style="height:100%;width:${fillW}px;background:rgba(0,0,0,.25);border-radius:3px"></div><div class="bar-lbl" style="font-size:9px;font-weight:700">${t.progress>0?t.progress+'% ':''}${esc(t.name)}</div></div></div>`;
+    } else {
+      cv+=`<div class="g-row" style="top:${y}px;width:${W}px">${baseBar}<div class="bar cb${ci}" style="left:${bx}px;width:${bw}px" onclick="openTask(${t.id})"><div class="bar-fill cc${ci}" style="width:${Math.round(t.progress/100*bw)}px;opacity:.85"></div><div class="bar-lbl">${t.progress>0?t.progress+'% — ':''}${esc(t.name)}</div></div></div>`;
+    }
+    y+=ROW;
+
+    if(hasChildren&&!isColl){
+      node._children.forEach(child=>renderNode(child,level+1,ci));
+    }
+  }
 
   Object.entries(grouped).forEach(([cat,ct])=>{
     const ci=cats.indexOf(cat)%COLORS.length;
     const col=COLORS[ci];
     const avg=Math.round(ct.reduce((a,t)=>a+t.progress,0)/ct.length);
     const isC=collapsed.has(cat);
-    lp+=`<div class="cat-row${isC?' collapsed':''}" data-cat="${cat.replace(/"/g,'&quot;')}" style="cursor:pointer"><span class="caret">▾</span><span class="cat-name">${esc(cat)}</span><span class="cat-pct" style="color:${col}">${avg}%</span></div>`;
+    // Raízes: tarefas sem pai OU cujo pai não está nesta categoria
+    const catIds=new Set(ct.map(t=>t.id));
+    const roots=ct.filter(t=>!t.parent_task_id||!catIds.has(t.parent_task_id));
+    lp+=`<div class="cat-row${isC?' collapsed':''}" data-cat="${cat.replace(/"/g,'&quot;')}"><span class="caret">▾</span><span class="cat-name">${esc(cat)}</span><span class="cat-pct" style="color:${col}">${avg}%</span></div>`;
     cv+=`<div class="g-row g-cat-row" style="top:${y}px;width:${W}px"></div>`;
     y+=ROW;
-    if(!isC){
-      ct.forEach(t=>{
-        const st=taskSt(t);
-        const sc={ok:'st-ok',atrs:'st-atrs',and:'st-and',nao:'st-nao'}[st];
-        // Indicador de dependência na lista esquerda
-        const hasDep=deps.some(d=>d.task_id===t.id||d.predecessor_id===t.id);
-        lp+=`<div class="task-row"><span class="status-dot ${sc}"></span><span class="task-name" title="${esc(t.name)}">${esc(t.name)}</span><span class="task-dates">${fd(t.start_date)}–${fd(t.end_date)}</span><span class="task-pct">${t.progress}%</span>${hasDep?'<span style="font-size:10px;opacity:.5" title="Tem dependências">🔗</span>':''}${CAN_PROG?`<button class="task-edit-btn" onclick="openTask(${t.id})">✏️</button>`:''}</div>`;
-        const bx=xOf(t.start_date,PS);
-        const bw=Math.max(dif(pd(t.start_date),pd(t.end_date))*zoom,4);
-        barPos[t.id]={x:bx, xEnd:bx+bw, midY:y+ROW/2};
-        // Barra de baseline (cinza, fina, abaixo)
-        let baseBar='';
-        if(showBaseline&&activeBaseline?.map[t.id]){
-          const bt=activeBaseline.map[t.id];
-          const bbx=xOf(bt.start_date,PS);
-          const bbw=Math.max(dif(pd(bt.start_date),pd(bt.end_date))*zoom,4);
-          baseBar=`<div class="bar-baseline" style="left:${bbx}px;width:${bbw}px" title="Baseline: ${bt.start_date} → ${bt.end_date} (${bt.progress}%)"></div>`;
-        }
-        cv+=`<div class="g-row" style="top:${y}px;width:${W}px">${baseBar}<div class="bar cb${ci}" style="left:${bx}px;width:${bw}px" onclick="openTask(${t.id})"><div class="bar-fill cc${ci}" style="width:${Math.round(t.progress/100*bw)}px;opacity:.85"></div><div class="bar-lbl">${t.progress>0?t.progress+'% — ':''}${esc(t.name)}</div></div></div>`;
-        y+=ROW;
-      });
-    }
+    if(!isC) roots.forEach(t=>renderNode(t,0,ci));
   });
 
   const canvas=document.getElementById('canvas');
-  canvas.style.height=y+'px';canvas.style.width=W+'px';
+  canvas.style.height=y+'px'; canvas.style.width=W+'px';
   canvas.innerHTML=cv;
 
-  // ── Desenha setas SVG de dependência ────────────────────────
+  // ── SVG setas de dependência ─────────────────────────────────
   if(deps.length){
     let svgLines='';
     deps.forEach(d=>{
-      const from=barPos[d.predecessor_id];
-      const to=barPos[d.task_id];
+      const from=barPos[d.predecessor_id],to=barPos[d.task_id];
       if(!from||!to)return;
-      // FS: sai do fim da predecessora, chega no início da sucessora
-      let x1=from.xEnd, y1=from.midY, x2=to.x, y2=to.midY;
+      let x1=from.xEnd,y1=from.midY,x2=to.x,y2=to.midY;
       if(d.type==='SS'){x1=from.x;}
       if(d.type==='FF'){x1=from.xEnd;x2=to.xEnd;}
       if(d.type==='SF'){x1=from.x;x2=to.xEnd;}
-      const dx=x2-x1, color=d.type==='FS'?'rgba(99,102,241,.55)':'rgba(245,158,11,.55)';
-      const mid=x1+dx*0.5;
-      // Polyline: sai → desce/sobe → chega
-      const pts=`${x1},${y1} ${mid},${y1} ${mid},${y2} ${x2},${y2}`;
-      svgLines+=`<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" stroke-dasharray="4 2" marker-end="url(#arr)"/>`;
+      const mid=x1+(x2-x1)*0.5;
+      const color=d.type==='FS'?'rgba(99,102,241,.55)':'rgba(245,158,11,.55)';
+      svgLines+=`<polyline points="${x1},${y1} ${mid},${y1} ${mid},${y2} ${x2},${y2}" fill="none" stroke="${color}" stroke-width="1.5" stroke-dasharray="4 2" marker-end="url(#arr)"/>`;
     });
-    const svg=`<svg style="position:absolute;inset:0;pointer-events:none;overflow:visible;z-index:4" width="${W}" height="${y}">
-      <defs><marker id="arr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="rgba(99,102,241,.7)"/></marker></defs>
-      ${svgLines}
-    </svg>`;
-    canvas.insertAdjacentHTML('beforeend',svg);
+    canvas.insertAdjacentHTML('beforeend',`<svg style="position:absolute;inset:0;pointer-events:none;overflow:visible;z-index:4" width="${W}" height="${y}"><defs><marker id="arr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="rgba(99,102,241,.7)"/></marker></defs>${svgLines}</svg>`);
   }
 
-  document.getElementById('lp-body').innerHTML=lp;
-  // scroll sync
   const lb=document.getElementById('lp-body'),tb=document.getElementById('tl-body');
-  lb.style.overflowY='scroll';lb.style.height='100%';
+  lb.innerHTML=lp;
+  lb.style.overflowY='scroll'; lb.style.height='100%';
   lb.onscroll=()=>{tb.scrollTop=lb.scrollTop;};
   tb.onscroll=()=>{lb.scrollTop=tb.scrollTop;};
   lb.addEventListener('wheel',e=>{e.preventDefault();lb.scrollTop+=e.deltaY;},{passive:false});
-  // click delegation para colapsar/expandir categorias
+
   lb.onclick=e=>{
-    const row=e.target.closest('.cat-row');
-    if(row) toggleCat(row.dataset.cat);
+    const catRow=e.target.closest('.cat-row');
+    if(catRow){toggleCat(catRow.dataset.cat);return;}
+    const caret=e.target.closest('.task-caret');
+    if(caret){toggleTask(parseInt(caret.dataset.tid));}
   };
+
+  if(CAN_EDIT) setupDnD(lb);
+}
+
+function toggleTask(id){if(collapsed.has(id))collapsed.delete(id);else collapsed.add(id);draw();}
+
+// ─── Drag & Drop ─────────────────────────────────────────────
+let _dragId=null;
+
+function setupDnD(container){
+  const rows=[...container.querySelectorAll('.task-row[draggable="true"]')];
+  rows.forEach(row=>{
+    row.ondragstart=e=>{
+      _dragId=parseInt(row.dataset.taskId);
+      e.dataTransfer.effectAllowed='move';
+      setTimeout(()=>row.classList.add('dragging'),0);
+    };
+    row.ondragend=()=>{
+      row.classList.remove('dragging');
+      rows.forEach(r=>r.classList.remove('drag-over-top','drag-over-bot'));
+      _dragId=null;
+    };
+    row.ondragover=e=>{
+      e.preventDefault();
+      rows.forEach(r=>r.classList.remove('drag-over-top','drag-over-bot'));
+      const rect=row.getBoundingClientRect();
+      const half=rect.top+rect.height/2;
+      row.classList.add(e.clientY<half?'drag-over-top':'drag-over-bot');
+    };
+    row.ondrop=async e=>{
+      e.preventDefault();
+      const tgt=parseInt(row.dataset.taskId);
+      if(!_dragId||_dragId===tgt)return;
+      const rect=row.getBoundingClientRect();
+      const insertBefore=e.clientY<(rect.top+rect.height/2);
+      await moveTask(_dragId,tgt,insertBefore);
+    };
+  });
+}
+
+async function moveTask(movedId,refId,insertBefore){
+  const moved=tasks.find(t=>t.id===movedId);
+  const ref=tasks.find(t=>t.id===refId);
+  if(!moved||!ref)return;
+
+  // Determina novo pai: se ref é pai de alguém → pode virar filho de ref; aqui simplesmente usamos mesmo pai de ref
+  const newParent=ref.parent_task_id||null;
+  const newCat=ref.category;
+
+  // Coleta irmãos no destino (mesmo pai e categoria) excluindo o movido
+  let siblings=tasks
+    .filter(t=>t.category===newCat&&(t.parent_task_id||null)===newParent&&t.id!==movedId)
+    .sort((a,b)=>a.order_idx-b.order_idx||(a.id-b.id));
+
+  const refIdx=siblings.findIndex(t=>t.id===refId);
+  if(refIdx===-1)siblings.push(moved);
+  else if(insertBefore)siblings.splice(refIdx,0,moved);
+  else siblings.splice(refIdx+1,0,moved);
+
+  // Atualiza order_idx em lote e muda pai/categoria se necessário
+  const updates=siblings.map((t,i)=>({id:t.id,order_idx:(i+1)*100}));
+  // Inclui a mudança de categoria/pai para o movido
+  const movedUpd=updates.find(u=>u.id===movedId);
+  if(movedUpd){movedUpd.category=newCat;movedUpd.parent_task_id=newParent;}
+
+  await Promise.all(updates.map(u=>{
+    const patch={order_idx:u.order_idx};
+    if(u.id===movedId){patch.category=newCat;patch.parent_task_id=newParent;}
+    return sb.from('tasks').update(patch).eq('id',u.id);
+  }));
+  await loadTasks();
 }
 
 function toggleCat(c){if(collapsed.has(c))collapsed.delete(c);else collapsed.add(c);draw();}
@@ -687,6 +828,13 @@ async function openTask(tid){
   document.getElementById('pslider').disabled=!CAN_PROG;
   document.getElementById('mod-save').style.display=CAN_PROG?'':'none';
   document.getElementById('mod-del').style.display=CAN_EDIT?'':'none';
+  // Seletor de tarefa pai
+  const parentSel=document.getElementById('t-parent');
+  parentSel.innerHTML='<option value="">— Sem pai (raiz) —</option>'+
+    tasks.filter(x=>x.id!==tid).map(x=>`<option value="${x.id}">${esc(x.category+' › '+x.name)}</option>`).join('');
+  parentSel.value=t.parent_task_id||'';
+  parentSel.disabled=!CAN_EDIT;
+  document.getElementById('t-parent-field').style.display=CAN_EDIT?'':'none';
   // form de alocação, horas e deps — visível por gestor+
   document.getElementById('alloc-add-form').style.display=CAN_EDIT?'flex':'none';
   document.getElementById('te-add-form').style.display=CAN_PROG?'grid':'none';
@@ -920,12 +1068,14 @@ async function saveTask(){
     }
   }
   if(CAN_EDIT){
+    const parentVal=document.getElementById('t-parent').value;
     await sb.from('tasks').update({
       name:document.getElementById('t-name').value.trim(),
       start_date:document.getElementById('t-start').value,
       end_date:document.getElementById('t-end').value,
       category:document.getElementById('t-cat').value.trim(),
       responsible:document.getElementById('t-resp').value.trim(),
+      parent_task_id:parentVal?parseInt(parentVal):null,
     }).eq('id',modId);
   }
   closeTask();
@@ -958,6 +1108,9 @@ async function openNewTask(){
   const dl=document.getElementById('cats-datalist');
   dl.innerHTML=cats.map(c=>`<option value="${c.replace(/"/g,'&quot;')}">`).join('');
   ['nt-name','nt-cat','nt-start','nt-end','nt-resp','nt-panel-start','nt-panel-cat'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const ntParent=document.getElementById('nt-parent');
+  ntParent.innerHTML='<option value="">— Sem pai (raiz) —</option>'+tasks.map(t=>`<option value="${t.id}">${esc(t.category+' › '+t.name)}</option>`).join('');
+  ntParent.value='';
   document.getElementById('nt-acts-wrap').style.display='none';
   // Load panel types
   const{data:pts}=await sb.from('panel_types').select('id,code,name').order('code');
@@ -1029,10 +1182,12 @@ async function saveNewTask(){
     const sd=document.getElementById('nt-start').value;
     const ed=document.getElementById('nt-end').value;
     if(!name||!cat||!sd||!ed){alert('Preencha nome, categoria, início e término');return;}
+    const ntPv=document.getElementById('nt-parent').value;
     const{error}=await sb.from('tasks').insert({
       project_id:PID,category:cat,name,start_date:sd,end_date:ed,
       responsible:document.getElementById('nt-resp').value.trim()||null,
-      progress:0,order_idx:999
+      progress:0,order_idx:999,
+      parent_task_id:ntPv?parseInt(ntPv):null
     });
     if(error){alert(error.message);return;}
   } else {
