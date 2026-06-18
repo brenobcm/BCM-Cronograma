@@ -54,6 +54,9 @@ html.dark .tb-btn,html.dark .zb:not(.on),html.dark .fb:not(.on){background:var(-
 .task-edit-btn{background:none;border:none;cursor:pointer;padding:2px 5px;border-radius:4px;color:var(--txt3);font-size:12px;opacity:0}
 .task-row:hover .task-edit-btn{opacity:1}
 .task-edit-btn:hover{color:var(--accent)}
+.indent-btn{background:none;border:1px solid var(--brd);cursor:pointer;padding:1px 5px;border-radius:4px;color:var(--txt3);font-size:10px;line-height:1.4;opacity:0;flex:none}
+.task-row:hover .indent-btn{opacity:1}
+.indent-btn:hover{color:var(--accent);border-color:var(--accent)}
 .g-row{height:var(--row);position:absolute;width:100%;border-bottom:1px solid var(--brd);display:flex;align-items:center}
 .g-cat-row{background:var(--sur2)}
 .bar{height:18px;border-radius:4px;position:absolute;overflow:hidden;cursor:pointer;transition:filter .15s}
@@ -650,6 +653,8 @@ function draw(){
     if(CAN_EDIT) lp+=`<span class="drag-handle" title="Arrastar para reordenar">⠿</span>`;
     lp+=`${caretEl}<span class="status-dot ${sc}"></span><span class="task-name" title="${esc(t.name)}">${esc(t.name)}</span><span class="task-dates">${fd(t.start_date)}–${fd(t.end_date)}</span><span class="task-pct">${t.progress}%</span>`;
     if(hasDep) lp+=`<span style="font-size:10px;opacity:.5" title="Tem dependências">🔗</span>`;
+    if(CAN_EDIT) lp+=`<button class="indent-btn" onclick="outdentTask(${t.id})" title="◀ Recuar — promover um nível (vira irmã do pai)">◀</button>`;
+    if(CAN_EDIT) lp+=`<button class="indent-btn" onclick="indentTask(${t.id})" title="▶ Avançar — virar sub-tarefa da de cima">▶</button>`;
     if(CAN_PROG) lp+=`<button class="task-edit-btn" style="opacity:1" onclick="openTask(${t.id})" title="Editar">✏️</button>`;
     if(CAN_EDIT) lp+=`<button class="task-edit-btn" style="opacity:1;color:#dc2626" onclick="delTaskById(${t.id})" title="Excluir">🗑</button>`;
     lp+='</div>';
@@ -741,6 +746,53 @@ function draw(){
 }
 
 function toggleTask(id){if(collapsed.has(id))collapsed.delete(id);else collapsed.add(id);draw();}
+
+// ─── Recuar / Avançar (indent/outdent estilo MS Project) ─────
+// Avançar ▶ : tarefa vira sub-tarefa (filha) da tarefa imediatamente acima no mesmo nível
+async function indentTask(id){
+  const t=tasks.find(x=>x.id===id); if(!t)return;
+  const parent=t.parent_task_id||null;
+  const siblings=tasks
+    .filter(x=>x.category===t.category&&(x.parent_task_id||null)===parent)
+    .sort((a,b)=>a.order_idx-b.order_idx||(a.id-b.id));
+  const idx=siblings.findIndex(x=>x.id===id);
+  if(idx<=0){alert('Não há tarefa acima no mesmo nível para se tornar pai.');return;}
+  const newParent=siblings[idx-1];
+  // T entra como último filho de newParent
+  const children=tasks
+    .filter(x=>x.category===t.category&&(x.parent_task_id||null)===newParent.id&&x.id!==id)
+    .sort((a,b)=>a.order_idx-b.order_idx||(a.id-b.id));
+  children.push(t);
+  await Promise.all(children.map((c,i)=>{
+    const patch={order_idx:(i+1)*100};
+    if(c.id===id)patch.parent_task_id=newParent.id;
+    return sb.from('tasks').update(patch).eq('id',c.id);
+  }));
+  // expande o novo pai para mostrar a tarefa recém-aninhada
+  collapsed.delete(newParent.id);
+  await loadTasks();
+}
+
+// Recuar ◀ : tarefa sobe um nível (passa a ser irmã do seu pai atual)
+async function outdentTask(id){
+  const t=tasks.find(x=>x.id===id); if(!t)return;
+  if(!t.parent_task_id){alert('Tarefa já está no nível principal.');return;}
+  const parent=tasks.find(x=>x.id===t.parent_task_id);
+  const newParent=parent?(parent.parent_task_id||null):null;
+  // Novo grupo de irmãos = filhos de newParent; insere T logo após o antigo pai
+  const siblings=tasks
+    .filter(x=>x.category===t.category&&(x.parent_task_id||null)===newParent&&x.id!==id)
+    .sort((a,b)=>a.order_idx-b.order_idx||(a.id-b.id));
+  const pIdx=parent?siblings.findIndex(x=>x.id===parent.id):-1;
+  if(pIdx===-1)siblings.push(t);
+  else siblings.splice(pIdx+1,0,t);
+  await Promise.all(siblings.map((c,i)=>{
+    const patch={order_idx:(i+1)*100};
+    if(c.id===id)patch.parent_task_id=newParent;
+    return sb.from('tasks').update(patch).eq('id',c.id);
+  }));
+  await loadTasks();
+}
 
 // ─── Editar / Excluir categoria ──────────────────────────────
 async function editCat(cat){
