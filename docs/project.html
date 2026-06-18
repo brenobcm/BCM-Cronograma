@@ -682,7 +682,7 @@ function draw(){
     // Raízes: tarefas sem pai OU cujo pai não está nesta categoria
     const catIds=new Set(ct.map(t=>t.id));
     const roots=ct.filter(t=>!t.parent_task_id||!catIds.has(t.parent_task_id));
-    lp+=`<div class="cat-row${isC?' collapsed':''}" data-cat="${cat.replace(/"/g,'&quot;')}"><span class="caret">▾</span><span class="cat-name">${esc(cat)}</span><span class="cat-pct" style="color:${col}">${avg}%</span></div>`;
+    lp+=`<div class="cat-row${isC?' collapsed':''}" data-cat="${cat.replace(/"/g,'&quot;')}" draggable="${CAN_EDIT}">${CAN_EDIT?'<span class="drag-handle" style="opacity:.5" title="Arrastar categoria">⠿</span>':''}<span class="caret">▾</span><span class="cat-name">${esc(cat)}</span><span class="cat-pct" style="color:${col}">${avg}%</span></div>`;
     cv+=`<div class="g-row g-cat-row" style="top:${y}px;width:${W}px"></div>`;
     y+=ROW;
     if(!isC) roots.forEach(t=>renderNode(t,0,ci));
@@ -729,68 +729,115 @@ function draw(){
 function toggleTask(id){if(collapsed.has(id))collapsed.delete(id);else collapsed.add(id);draw();}
 
 // ─── Drag & Drop ─────────────────────────────────────────────
-let _dragId=null;
+let _dragId=null, _dragCat=null;
 
 function setupDnD(container){
-  const rows=[...container.querySelectorAll('.task-row[draggable="true"]')];
-  rows.forEach(row=>{
+  const taskRows=[...container.querySelectorAll('.task-row[draggable="true"]')];
+  const catRows=[...container.querySelectorAll('.cat-row[draggable="true"]')];
+  const allDrag=[...catRows,...taskRows];
+
+  function clearHighlight(){allDrag.forEach(r=>r.classList.remove('drag-over-top','drag-over-bot','dragging'));}
+
+  // ── Categoria ──────────────────────────────────────────────
+  catRows.forEach(row=>{
     row.ondragstart=e=>{
-      _dragId=parseInt(row.dataset.taskId);
+      _dragCat=row.dataset.cat; _dragId=null;
       e.dataTransfer.effectAllowed='move';
+      e.dataTransfer.setData('text/plain','cat:'+_dragCat);
       setTimeout(()=>row.classList.add('dragging'),0);
     };
-    row.ondragend=()=>{
-      row.classList.remove('dragging');
-      rows.forEach(r=>r.classList.remove('drag-over-top','drag-over-bot'));
-      _dragId=null;
-    };
+    row.ondragend=()=>{clearHighlight();_dragCat=null;};
     row.ondragover=e=>{
+      if(!_dragCat)return; // apenas cat sobre cat
       e.preventDefault();
-      rows.forEach(r=>r.classList.remove('drag-over-top','drag-over-bot'));
+      allDrag.forEach(r=>r.classList.remove('drag-over-top','drag-over-bot'));
       const rect=row.getBoundingClientRect();
-      const half=rect.top+rect.height/2;
-      row.classList.add(e.clientY<half?'drag-over-top':'drag-over-bot');
+      row.classList.add(e.clientY<rect.top+rect.height/2?'drag-over-top':'drag-over-bot');
     };
     row.ondrop=async e=>{
       e.preventDefault();
-      const tgt=parseInt(row.dataset.taskId);
-      if(!_dragId||_dragId===tgt)return;
+      if(!_dragCat||_dragCat===row.dataset.cat)return;
       const rect=row.getBoundingClientRect();
-      const insertBefore=e.clientY<(rect.top+rect.height/2);
-      await moveTask(_dragId,tgt,insertBefore);
+      const before=e.clientY<rect.top+rect.height/2;
+      clearHighlight();
+      await moveCat(_dragCat,row.dataset.cat,before);
+      _dragCat=null;
+    };
+  });
+
+  // ── Tarefa ─────────────────────────────────────────────────
+  taskRows.forEach(row=>{
+    row.ondragstart=e=>{
+      _dragId=parseInt(row.dataset.taskId); _dragCat=null;
+      e.dataTransfer.effectAllowed='move';
+      e.dataTransfer.setData('text/plain','task:'+_dragId);
+      setTimeout(()=>row.classList.add('dragging'),0);
+    };
+    row.ondragend=()=>{clearHighlight();_dragId=null;};
+    row.ondragover=e=>{
+      if(!_dragId)return;
+      e.preventDefault();
+      allDrag.forEach(r=>r.classList.remove('drag-over-top','drag-over-bot'));
+      const rect=row.getBoundingClientRect();
+      row.classList.add(e.clientY<rect.top+rect.height/2?'drag-over-top':'drag-over-bot');
+    };
+    row.ondrop=async e=>{
+      e.preventDefault();
+      if(!_dragId)return;
+      const tgt=parseInt(row.dataset.taskId);
+      if(_dragId===tgt)return;
+      const rect=row.getBoundingClientRect();
+      const before=e.clientY<rect.top+rect.height/2;
+      clearHighlight();
+      await moveTask(_dragId,tgt,before);
+      _dragId=null;
     };
   });
 }
 
+// Reordena categorias: move draggedCat antes/depois de refCat
+async function moveCat(draggedCat,refCat,insertBefore){
+  // Ordem atual de categorias
+  let order=cats.filter(c=>c!==draggedCat);
+  const refIdx=order.indexOf(refCat);
+  if(refIdx===-1)return;
+  if(insertBefore) order.splice(refIdx,0,draggedCat);
+  else             order.splice(refIdx+1,0,draggedCat);
+
+  // Para cada categoria na nova ordem, reatribui order_idx de todas as suas tarefas
+  // usando catRank*100000 + posição interna, assim categorias ficam sempre separadas
+  const updates=[];
+  order.forEach((cat,ci)=>{
+    const catTasks=tasks.filter(t=>t.category===cat).sort((a,b)=>a.order_idx-b.order_idx||(a.id-b.id));
+    catTasks.forEach((t,ti)=>updates.push({id:t.id,order_idx:(ci+1)*100000+(ti+1)*100}));
+  });
+  await Promise.all(updates.map(u=>sb.from('tasks').update({order_idx:u.order_idx}).eq('id',u.id)));
+  await loadTasks();
+}
+
+// Reordena tarefas: move movedId antes/depois de refId (muda pai/cat se necessário)
 async function moveTask(movedId,refId,insertBefore){
   const moved=tasks.find(t=>t.id===movedId);
   const ref=tasks.find(t=>t.id===refId);
   if(!moved||!ref)return;
 
-  // Determina novo pai: se ref é pai de alguém → pode virar filho de ref; aqui simplesmente usamos mesmo pai de ref
   const newParent=ref.parent_task_id||null;
   const newCat=ref.category;
 
-  // Coleta irmãos no destino (mesmo pai e categoria) excluindo o movido
+  // Irmãos no destino
   let siblings=tasks
     .filter(t=>t.category===newCat&&(t.parent_task_id||null)===newParent&&t.id!==movedId)
     .sort((a,b)=>a.order_idx-b.order_idx||(a.id-b.id));
 
   const refIdx=siblings.findIndex(t=>t.id===refId);
-  if(refIdx===-1)siblings.push(moved);
-  else if(insertBefore)siblings.splice(refIdx,0,moved);
+  if(refIdx===-1) siblings.push(moved);
+  else if(insertBefore) siblings.splice(refIdx,0,moved);
   else siblings.splice(refIdx+1,0,moved);
 
-  // Atualiza order_idx em lote e muda pai/categoria se necessário
-  const updates=siblings.map((t,i)=>({id:t.id,order_idx:(i+1)*100}));
-  // Inclui a mudança de categoria/pai para o movido
-  const movedUpd=updates.find(u=>u.id===movedId);
-  if(movedUpd){movedUpd.category=newCat;movedUpd.parent_task_id=newParent;}
-
-  await Promise.all(updates.map(u=>{
-    const patch={order_idx:u.order_idx};
-    if(u.id===movedId){patch.category=newCat;patch.parent_task_id=newParent;}
-    return sb.from('tasks').update(patch).eq('id',u.id);
+  await Promise.all(siblings.map((t,i)=>{
+    const patch={order_idx:(i+1)*100};
+    if(t.id===movedId){patch.category=newCat;patch.parent_task_id=newParent;}
+    return sb.from('tasks').update(patch).eq('id',t.id);
   }));
   await loadTasks();
 }
